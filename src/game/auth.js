@@ -1,6 +1,5 @@
 const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL ||"http://localhost:5000/api";
 export async function login(username, password) {
   const response = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
@@ -19,7 +18,6 @@ export async function login(username, password) {
 
   return data;
 }
-
 export async function register(name, username, password) {
   const response = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
