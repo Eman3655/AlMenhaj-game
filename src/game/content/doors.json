@@ -1,0 +1,40 @@
+[
+  { "id": "door-01", "number": 1, "title": "مرجعية الوحي وشموليته ومركزية التسليم لله ولرسوله", "file": "door-01.json", "cardId": "card-01", "rewardId": "reward-01", "xp": 80 },
+  { "id": "door-02", "number": 2, "title": "تلقي القرآن على منهاج النبوة", "file": "door-02.json", "cardId": "card-02", "rewardId": "reward-02", "xp": 80 },
+  { "id": "door-03", "number": 3, "title": "تعظيم حدود الله والتحذير من مخالفة أمره وأمر رسوله", "file": "door-03.json", "cardId": "card-03", "rewardId": "reward-03", "xp": 80 },
+  { "id": "door-04", "number": 4, "title": "ضبط الأفهام على معيار الوحي", "file": "door-04.json", "cardId": "card-04", "rewardId": "reward-04", "xp": 80 },
+  { "id": "door-05", "number": 5, "title": "أن الدين على مراتب متفاوتة", "file": "door-05.json", "cardId": "card-05", "rewardId": "reward-05", "xp": 80 },
+
+  { "id": "door-06", "number": 6, "title": "مركزية التزكية", "file": "door-06.json", "cardId": "card-06", "rewardId": "reward-06", "xp": 80 },
+  { "id": "door-07", "number": 7, "title": "شرف العلم النافع وفضله", "file": "door-07.json", "cardId": "card-07", "rewardId": "reward-07", "xp": 80 },
+  { "id": "door-08", "number": 8, "title": "مركزية العمل", "file": "door-08.json", "cardId": "card-08", "rewardId": "reward-08", "xp": 80 },
+  { "id": "door-09", "number": 9, "title": "صدق النية", "file": "door-09.json", "cardId": "card-09", "rewardId": "reward-09", "xp": 80 },
+  { "id": "door-10", "number": 10, "title": "استحضار الغاية", "file": "door-10.json", "cardId": "card-10", "rewardId": "reward-10", "xp": 80 },
+
+  { "id": "door-11", "number": 11, "title": "تحمل المسؤولية الفردية", "file": "door-11.json", "cardId": "card-11", "rewardId": "reward-11", "xp": 80 },
+  { "id": "door-12", "number": 12, "title": "المسؤولية العامة", "file": "door-12.json", "cardId": "card-12", "rewardId": "reward-12", "xp": 80 },
+  { "id": "door-13", "number": 13, "title": "اتباع هدي الأنبياء", "file": "door-13.json", "cardId": "card-13", "rewardId": "reward-13", "xp": 80 },
+  { "id": "door-14", "number": 14, "title": "فضل الإصلاح والدعوة", "file": "door-14.json", "cardId": "card-14", "rewardId": "reward-14", "xp": 80 },
+  { "id": "door-15", "number": 15, "title": "صفات المصلحين", "file": "door-15.json", "cardId": "card-15", "rewardId": "reward-15", "xp": 80 },
+
+  { "id": "door-16", "number": 16, "title": "الوعي بسبيل المجرمين", "file": "door-16.json", "cardId": "card-16", "rewardId": "reward-16", "xp": 80 },
+  { "id": "door-17", "number": 17, "title": "العناية بالشباب", "file": "door-17.json", "cardId": "card-17", "rewardId": "reward-17", "xp": 80 },
+  { "id": "door-18", "number": 18, "title": "دور المرأة في نصرة الإسلام", "file": "door-18.json", "cardId": "card-18", "rewardId": "reward-18", "xp": 80 },
+  { "id": "door-19", "number": 19, "title": "الثبات على الاستقامة", "file": "door-19.json", "cardId": "card-19", "rewardId": "reward-19", "xp": 80 },
+  { "id": "door-20", "number": 20, "title": "الاعتدال والتيسير", "file": "door-20.json", "cardId": "card-20", "rewardId": "reward-20", "xp": 80 },
+
+  { "id": "door-21", "number": 21, "title": "حسن الخلق والبر والإحسان", "file": "door-21.json", "cardId": "card-21", "rewardId": "reward-21", "xp": 80 },
+  { "id": "door-22", "number": 22, "title": "مفاتيح الهداية والبصيرة", "file": "door-22.json", "cardId": "card-22", "rewardId": "reward-22", "xp": 80 },
+  { "id": "door-23", "number": 23, "title": "الصحبة الصالحة", "file": "door-23.json", "cardId": "card-23", "rewardId": "reward-23", "xp": 80 },
+  { "id": "door-24", "number": 24, "title": "الحذر من الفتن", "file": "door-24.json", "cardId": "card-24", "rewardId": "reward-24", "xp": 80 },
+  { "id": "door-25", "number": 25, "title": "أسباب ضعف المسلمين", "file": "door-25.json", "cardId": "card-25", "rewardId": "reward-25", "xp": 80 },
+
+  { "id": "door-26", "number": 26, "title": "السنن الإلهية في الإصلاح", "file": "door-26.json", "cardId": "card-26", "rewardId": "reward-26", "xp": 80 },
+  { "id": "door-27", "number": 27, "title": "حسن العاقبة بعد البلاء", "file": "door-27.json", "cardId": "card-27", "rewardId": "reward-27", "xp": 80 },
+  { "id": "door-28", "number": 28, "title": "مبشرات التمكين", "file": "door-28.json", "cardId": "card-28", "rewardId": "reward-28", "xp": 80 },
+  { "id": "door-29", "number": 29, "title": "الإسلام هو الدين المقبول", "file": "door-29.json", "cardId": "card-29", "rewardId": "reward-29", "xp": 80 },
+  { "id": "door-30", "number": 30, "title": "الخوف والرجاء", "file": "door-30.json", "cardId": "card-30", "rewardId": "reward-30", "xp": 80 },
+
+  { "id": "door-31", "number": 31, "title": "الشوق إلى رسول الله ﷺ", "file": "door-31.json", "cardId": "card-31", "rewardId": "reward-31", "xp": 80 },
+  { "id": "door-32", "number": 32, "title": "الشوق إلى الله سبحانه وتعالى", "file": "door-32.json", "cardId": "card-32", "rewardId": "reward-32", "xp": 100 }
+]

@@ -1,0 +1,56 @@
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'student',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS doors (
+  id TEXT PRIMARY KEY,
+  number INTEGER UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT,
+  illustration TEXT,
+  key_points JSONB NOT NULL DEFAULT '[]',
+  quiz JSONB NOT NULL DEFAULT '{}',
+  scenario JSONB NOT NULL DEFAULT '{}',
+  mini JSONB NOT NULL DEFAULT '{}',
+  card_id TEXT,
+  xp INTEGER NOT NULL DEFAULT 80
+);
+
+CREATE TABLE IF NOT EXISTS cards (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  icon TEXT,
+  power TEXT
+);
+
+CREATE TABLE IF NOT EXISTS obstacles (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  gate_after TEXT REFERENCES doors(id) ON DELETE CASCADE,
+  required_card_id TEXT REFERENCES cards(id) ON DELETE SET NULL,
+  prompt TEXT,
+  options JSONB NOT NULL DEFAULT '[]',
+  answer_index INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS user_progress (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  door_id TEXT REFERENCES doors(id) ON DELETE CASCADE,
+  completed BOOLEAN NOT NULL DEFAULT FALSE,
+  completed_at TIMESTAMPTZ,
+  UNIQUE(user_id, door_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_cards (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  card_id TEXT REFERENCES cards(id) ON DELETE CASCADE,
+  acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, card_id)
+);

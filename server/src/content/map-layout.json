@@ -1,0 +1,37 @@
+[
+  { "doorId": "door-01", "x": 50, "y": 222 },
+  { "doorId": "door-02", "x": 42, "y": 213 },
+  { "doorId": "door-03", "x": 30, "y": 204 },
+  { "doorId": "door-04", "x": 20, "y": 180 },
+  { "doorId": "door-05", "x": 40, "y": 170 },
+  { "doorId": "door-06", "x": 50, "y": 185 },
+  { "doorId": "door-07", "x": 70, "y": 168 },
+  { "doorId": "door-08", "x": 64, "y": 159 },
+
+  { "doorId": "door-09", "x": 20, "y": 150 },
+  { "doorId": "door-10", "x": 35, "y": 150 },
+  { "doorId": "door-11", "x": 45, "y": 150 },
+  { "doorId": "door-12", "x": 55, "y": 150 },
+  { "doorId": "door-13", "x": 80, "y": 140 },
+  { "doorId": "door-14", "x": 55, "y": 127 },
+  { "doorId": "door-15", "x": 40, "y": 110 },
+  { "doorId": "door-16", "x": 20, "y": 100 },
+
+  { "doorId": "door-17", "x": 30, "y": 90 },
+  { "doorId": "door-18", "x": 40, "y": 80 },
+  { "doorId": "door-19", "x": 50, "y": 70 },
+  { "doorId": "door-20", "x": 65, "y": 70 },
+  { "doorId": "door-21", "x": 75, "y": 60 },
+  { "doorId": "door-22", "x": 60, "y": 50 },
+  { "doorId": "door-23", "x": 45, "y": 50 },
+  { "doorId": "door-24", "x": 25, "y": 60 },
+
+  { "doorId": "door-25", "x": 25, "y": 40 },
+  { "doorId": "door-26", "x": 20, "y": 20 },
+  { "doorId": "door-27", "x": 30, "y": 30 },
+  { "doorId": "door-28", "x": 40, "y": 35 },
+  { "doorId": "door-29", "x": 55, "y": 30 },
+  { "doorId": "door-30", "x": 70, "y": 20 },
+  { "doorId": "door-31", "x": 60, "y": 15 },
+  { "doorId": "door-32", "x": 40, "y": 12 }
+]

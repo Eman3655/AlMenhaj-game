@@ -1,0 +1,20 @@
+[
+  {
+    "id": "obstacle-01",
+    "title": "عقبة الغفلة",
+    "gateAfter": "door-04",
+    "requiredCardId": "card-04",
+    "prompt": "ظهرت الغفلة في الطريق، ما العلاج الأقرب؟",
+    "options": ["الرجوع للوحي والعمل", "تجاهل الباب", "ترك المراجعة"],
+    "answerIndex": 0
+  },
+  {
+    "id": "obstacle-02",
+    "title": "عقبة العجلة",
+    "gateAfter": "door-09",
+    "requiredCardId": "card-05",
+    "prompt": "العجلة تمنع الفهم، ما التصرف الصحيح؟",
+    "options": ["التدرج والصبر", "القفز للنهاية", "ترك التعلم"],
+    "answerIndex": 0
+  }
+]

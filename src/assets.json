@@ -1,0 +1,9 @@
+{
+  "MAP_BACKDROP": "/generated-images/map_backdrop.png",
+  "OBSTACLE_TOKEN": "/generated-images/obstacle_token.png",
+  "LOCKED_DOOR": "/generated-images/locked_door.png",
+  "TREASURE_CHEST": "/generated-images/treasure_chest.png",
+  "STUDENT_EXPLORER": "/generated-images/student_explorer.png",
+  "OPEN_DOOR": "/generated-images/open_door.png",
+  "KNOWLEDGE_CARD": "/generated-images/knowledge_card.png"
+}
