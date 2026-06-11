@@ -40,7 +40,7 @@ export function renderAuthView(container, onSuccess) {
 
               <label>
                 <span>اسم المستخدم</span>
-                <input name="username" type="text" placeholder="مثال: yahya" required />
+                <input name="username" type="text" placeholder="مثال: محمد" required />
               </label>
 
               <label>
