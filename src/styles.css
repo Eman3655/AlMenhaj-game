@@ -1490,7 +1490,7 @@ button {
     bottom: 0.5rem !important;
     top: auto !important;
 
-    max-height: 36dvhس !important;
+    max-height: 36dvh !important;
     min-height: 0 !important;
     height: auto !important;
 
@@ -1511,3 +1511,32 @@ button {
   }
 }
 
+.top-hud {
+  position: fixed !important;
+  top: 1rem !important;
+  left: 4rem !important;
+  right: 1rem !important;
+  z-index: 9998 !important;
+}
+
+.bottom-nav {
+  position: fixed !important;
+  bottom: 1rem !important;
+  left: 4rem !important;
+  right: 1rem !important;
+  z-index: 9998 !important;
+}
+
+@media (max-width: 760px) {
+  .top-hud {
+    top: 0.75rem !important;
+    left: 4rem !important;
+    right: 0.75rem !important;
+  }
+
+  .bottom-nav {
+    bottom: 0.75rem !important;
+    left: 4rem !important;
+    right: 0.75rem !important;
+  }
+}

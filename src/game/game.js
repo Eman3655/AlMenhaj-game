@@ -338,14 +338,8 @@ async function loadSave() {
   }
 
 function showCardReward(card) {
-  if (!card || rewardAnimation) return;
-
+  if (!card) return;
   rewardAnimation = card;
-
-  setTimeout(() => {
-    rewardAnimation = null;
-    render();
-  }, 4200);
 }
 
 function showObstacleHit(obstacle) {
@@ -768,18 +762,20 @@ ${renderRewardAnimation()}
 ${renderHitAnimation()}
   `;
 
-  shell.insertAdjacentHTML(
-    "afterend",
-    `
-      <button class="floating-toggle top-toggle" data-action="toggle-hud">
-        ${hudCollapsed ? "📊" : "✕"}
-      </button>
+document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
 
-      <button class="floating-toggle bottom-toggle" data-action="toggle-nav">
-        ${navCollapsed ? "☰" : "✕"}
-      </button>
-    `
-  );
+shell.insertAdjacentHTML(
+  "afterend",
+  `
+    <button class="floating-toggle top-toggle" data-action="toggle-hud">
+      ${hudCollapsed ? "📊" : "✕"}
+    </button>
+
+    <button class="floating-toggle bottom-toggle" data-action="toggle-nav">
+      ${navCollapsed ? "☰" : "✕"}
+    </button>
+  `
+);
 
   saveIndicator = shell.querySelector(".save-indicator");
   renderSaveState();
@@ -818,16 +814,19 @@ requestAnimationFrame(() => {
     };
   }
 
-  function renderRewardAnimation() {
+function renderRewardAnimation() {
   if (!rewardAnimation) return "";
+
+  const card = rewardAnimation;
+  rewardAnimation = null;
 
   return `
     <div class="reward-animation">
       <div class="reward-card-pop">
         <div class="reward-rays"></div>
         <img src="${assetUrls.KNOWLEDGE_CARD}" alt="" draggable="false" />
-        <strong>${escapeHtml(rewardAnimation.title || "بطاقة جديدة")}</strong>
-        <span>${escapeHtml(rewardAnimation.power || "حصلت على بطاقة جديدة")}</span>
+        <strong>${escapeHtml(card.title || "بطاقة جديدة")}</strong>
+        <span>${escapeHtml(card.power || "حصلت على بطاقة جديدة")}</span>
       </div>
     </div>
   `;
