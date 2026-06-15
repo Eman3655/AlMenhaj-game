@@ -1,7 +1,7 @@
 [
-  { "doorId": "door-01", "x": 50, "y": 222 },
-  { "doorId": "door-02", "x": 42, "y": 213 },
-  { "doorId": "door-03", "x": 30, "y": 204 },
+  { "doorId": "door-01", "x": 50, "y": 210 },
+  { "doorId": "door-02", "x": 38, "y": 210 },
+  { "doorId": "door-03", "x": 30, "y": 200 },
   { "doorId": "door-04", "x": 20, "y": 180 },
   { "doorId": "door-05", "x": 40, "y": 170 },
   { "doorId": "door-06", "x": 50, "y": 185 },

@@ -15,6 +15,16 @@ const FALLBACK_ASSETS = {
   STUDENT_EXPLORER: "/generated-images/student_explorer.png",
 };
 
+const MAP_COORD_WIDTH = 100;
+const MAP_COORD_HEIGHT = 230;
+
+function normalizeMapPosition(pos) {
+  return {
+    x: pos.x,
+    y: (pos.y / MAP_COORD_HEIGHT) * 100,
+  };
+}
+
 const LEVELS = [
   { min: 0, title: "المبتدئ" },
   { min: 90, title: "طالب العلم" },
@@ -91,10 +101,7 @@ function getNodePosition(index, total, doorId = "") {
   const savedPosition = mapLayout.find((item) => item.doorId === doorId);
 
   if (savedPosition) {
-    return {
-      x: savedPosition.x,
-      y: savedPosition.y,
-    };
+    return normalizeMapPosition(savedPosition);
   }
 
   if (total <= 1) return { x: 50, y: 92 };
@@ -118,6 +125,21 @@ function restoreMapScrollTop(shell, scrollTop) {
   if (mapStage) {
     mapStage.scrollTop = scrollTop;
   }
+}
+
+function scrollToPlayer(shell) {
+  const mapStage = shell?.querySelector(".map-stage");
+  const player = shell?.querySelector(".player-marker");
+
+  if (!mapStage || !player) return;
+
+  const stageRect = mapStage.getBoundingClientRect();
+  const playerRect = player.getBoundingClientRect();
+
+  const playerCenterY =
+    playerRect.top - stageRect.top + mapStage.scrollTop + playerRect.height / 2;
+
+  mapStage.scrollTop = Math.max(0, playerCenterY - mapStage.clientHeight / 2);
 }
 
 export function createGame({ mount, sdk, ready, tweaks, assets }) {
@@ -762,9 +784,13 @@ ${renderHitAnimation()}
   saveIndicator = shell.querySelector(".save-indicator");
   renderSaveState();
 
-  requestAnimationFrame(() => {
+requestAnimationFrame(() => {
+  if (previousScrollTop > 0) {
     restoreMapScrollTop(shell, previousScrollTop);
-  });
+  } else {
+    scrollToPlayer(shell);
+  }
+});
 }
 
   function navButton(id, label, icon, current) {
@@ -818,10 +844,11 @@ function renderHitAnimation() {
   `;
 }
 
-  function renderMap(stats) {
-    return `
-      <div class="map-view">
-        <section class="map-stage" aria-label="خريطة الرحلة">
+function renderMap(stats) {
+  return `
+    <div class="map-view">
+      <section class="map-stage" aria-label="خريطة الرحلة">
+        <div class="map-canvas">
           <img class="map-bg" src="${assetUrls.MAP_BACKDROP}" alt="" draggable="false" />
           <div class="map-objects">
             ${renderTreasure()}
@@ -829,17 +856,18 @@ function renderHitAnimation() {
             ${renderDoorNodes()}
             ${renderPlayerMarker()}
           </div>
-        </section>
-        <aside class="quest-panel">
-          ${selectedObstacleId ? renderObstaclePanel() : renderDoorPanel(stats)}
-        </aside>
-      </div>
-    `;
-  }
+        </div>
+      </section>
+      <aside class="quest-panel">
+        ${selectedObstacleId ? renderObstaclePanel() : renderDoorPanel(stats)}
+      </aside>
+    </div>
+  `;
+}
 
   function renderTreasure() {
     return `
-      <div class="treasure-goal" style="--x:50%;--y:7%">
+      <div class="treasure-goal" style="--x:50%;--y:4%">
         <img src="${assetUrls.TREASURE_CHEST}" alt="كنز ميراث النبوة" draggable="false" />
       </div>
     `;
