@@ -1540,3 +1540,43 @@ button {
     right: 0.75rem !important;
   }
 }
+
+@media (max-width: 760px) {
+  .map-view {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .map-stage {
+    height: 58dvh !important;
+    max-height: 58dvh !important;
+    overflow: auto !important;
+  }
+
+  .quest-panel {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    top: auto !important;
+
+    width: auto !important;
+    margin: 0.5rem !important;
+    height: calc(42dvh - 1rem) !important;
+    max-height: calc(42dvh - 1rem) !important;
+    min-height: 0 !important;
+
+    overflow-y: auto !important;
+    z-index: 10 !important;
+  }
+}
+
+.map-stage {
+  direction: ltr !important;
+}
+
+.map-canvas {
+  direction: rtl !important;
+}

@@ -133,13 +133,17 @@ function scrollToPlayer(shell) {
 
   if (!mapStage || !player) return;
 
-  const stageRect = mapStage.getBoundingClientRect();
-  const playerRect = player.getBoundingClientRect();
+  const playerCenterX = player.offsetLeft + player.offsetWidth / 2;
+  const playerCenterY = player.offsetTop + player.offsetHeight / 2;
 
-  const playerCenterY =
-    playerRect.top - stageRect.top + mapStage.scrollTop + playerRect.height / 2;
+  const targetLeft = playerCenterX - mapStage.clientWidth / 2;
+  const targetTop = playerCenterY - mapStage.clientHeight / 2;
 
-  mapStage.scrollTop = Math.max(0, playerCenterY - mapStage.clientHeight / 2);
+  mapStage.scrollTo({
+    left: Math.max(0, targetLeft),
+    top: Math.max(0, targetTop),
+    behavior: "auto",
+  });
 }
 
 export function createGame({ mount, sdk, ready, tweaks, assets }) {
@@ -781,11 +785,7 @@ shell.insertAdjacentHTML(
   renderSaveState();
 
 requestAnimationFrame(() => {
-  if (previousScrollTop > 0) {
-    restoreMapScrollTop(shell, previousScrollTop);
-  } else {
-    scrollToPlayer(shell);
-  }
+  scrollToPlayer(shell);
 });
 }
 
