@@ -1,15 +1,29 @@
 import pg from "pg";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
 const { Pool } = pg;
 
-const isLocalDatabase =
-  process.env.DATABASE_URL?.includes("localhost") ||
-  process.env.DATABASE_URL?.includes("127.0.0.1");
+function getSslConfig(connectionString) {
+  if (!connectionString) return false;
+
+  const url = new URL(connectionString);
+  const sslMode = url.searchParams.get("sslmode");
+
+  if (sslMode === "require") {
+    return { rejectUnauthorized: false };
+  }
+
+  return false;
+}
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: isLocalDatabase ? false : { rejectUnauthorized: false },
+  ssl: getSslConfig(process.env.DATABASE_URL),
 });

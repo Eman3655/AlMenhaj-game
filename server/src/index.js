@@ -1,9 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import authRoutes from "./routes/auth.js";
 import gameRoutes from "./routes/game.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
 const app = express();
@@ -34,5 +39,11 @@ app.get("/", (req, res) => {
 });
 
 const port = process.env.PORT || 5000;
+
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Mirath Game API listening on http://localhost:${port}`);
+  });
+}
 
 export default app;

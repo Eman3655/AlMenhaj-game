@@ -149,12 +149,24 @@ button {
 }
 
 .map-view {
+  position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 0.5rem;
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+.map-view.has-overlay .map-stage {
+  pointer-events: none;
+  overflow: hidden;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+.map-view.has-overlay .player-marker {
+  animation-play-state: paused;
 }
 
 .map-stage {
@@ -323,6 +335,40 @@ button {
   padding: 0.8rem;
   border-radius: 1.2rem;
   background: linear-gradient(180deg, rgba(255, 248, 229, 0.98), rgba(240, 216, 178, 0.98));
+}
+
+.map-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(15, 27, 37, 0.55);
+  backdrop-filter: blur(1px);
+  pointer-events: none;
+}
+
+.quest-panel.quest-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 20;
+  width: min(42rem, calc(100% - 2rem));
+  max-height: min(80vh, 36rem);
+  transform: translate(-50%, -50%);
+  overflow: auto;
+  padding: 1.1rem;
+  border-radius: 1.5rem;
+  box-shadow: 0 2rem 3.5rem rgba(0, 0, 0, 0.28);
+}
+
+@media (max-width: 760px) {
+  .quest-panel.quest-overlay {
+    width: calc(100% - 1.2rem);
+    max-height: calc(100vh - 4rem);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    position: fixed;
+  }
 }
 
 .quest-panel h2,
@@ -805,12 +851,17 @@ button {
 
 @media (min-width: 760px) {
   .map-view {
-    grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.42fr);
+    grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr);
   }
 
   .quest-panel {
     max-height: none;
+    display: none;
+  }
+
+  .map-view.has-overlay .quest-panel.quest-overlay {
+    display: block;
   }
 
   .card-grid,
@@ -853,35 +904,6 @@ button {
   }
 }
 
-@media (max-width: 760px) {
-  .game-shell {
-    padding: 0;
-  }
-
-  .map-view {
-    display: block !important;
-    height: 100dvh !important;
-  }
-
-  .quest-panel {
-    position: fixed;
-    left: 0.5rem;
-    right: 0.5rem;
-    bottom: 0.5rem;
-    z-index: 1000;
-    max-height: 42dvh;
-    overflow: auto;
-  }
-
-  .map-node {
-    width: 4.2rem;
-  }
-
-  .map-node b {
-    max-width: 5.5rem;
-    font-size: 0.62rem;
-  }
-}
 
 
 .auth-screen {
@@ -1277,6 +1299,58 @@ button {
   font-weight: 800;
 }
 
+.reward-key-pop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+  width: min(12rem, 50vw);
+  padding: 0.5rem 0.25rem 0.25rem;
+  background: none;
+  border: none;
+  text-align: center;
+  animation: rewardPop 2.2s ease forwards;
+}
+
+.reward-key-pop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 2rem 2rem rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.reward-key-pop img {
+  position: relative;
+  z-index: 2;
+  width: 7rem;
+  margin: 0;
+  display: block;
+  filter: drop-shadow(0 0 1.25rem rgba(255, 255, 255, 0.24));
+}
+
+.reward-key-pop strong {
+  position: relative;
+  z-index: 2;
+  display: block;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  margin-top: 0.35rem;
+  text-shadow: 0 0 0.35rem rgba(0, 0, 0, 0.2);
+}
+
+.reward-key-pop span {
+  position: relative;
+  z-index: 2;
+  display: block;
+  margin-top: 0.2rem;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
 .reward-rays {
   position: absolute;
   inset: -3rem;
@@ -1421,21 +1495,54 @@ button {
 @media (min-width: 760px) {
   .map-view {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.42fr);
-    grid-template-rows: auto !important;
-    align-items: start !important;
-    height: fit-content !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+    align-items: stretch !important;
+    height: 100% !important;
     gap: 0.5rem !important;
   }
 
   .quest-panel {
+    display: none !important;
     align-self: start !important;
     max-height: fit-content !important;
   }
 
+  .map-view.has-overlay {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+  }
+
+  .map-view.has-overlay .quest-panel.quest-overlay {
+    display: block !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(42rem, calc(100% - 3rem)) !important;
+    max-width: 100% !important;
+    max-height: min(84vh, 40rem) !important;
+    margin: 0 auto !important;
+    overflow: auto !important;
+    z-index: 9999 !important;
+    height: auto !important;
+  }
+
+  .map-view.has-overlay .map-stage {
+    overflow: hidden !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: none !important;
+  }
+
+  .map-view.has-overlay .map-objects,
+  .map-view.has-overlay .map-bg {
+    filter: blur(0.4rem) brightness(0.75) !important;
+  }
+
   .map-stage {
-    align-self: start !important;
-    height: fit-content !important;
+    align-self: stretch !important;
+    height: 100% !important;
     max-height: calc(100vh - 120px) !important;
   }
 }
@@ -1461,7 +1568,6 @@ button {
   max-height: none !important;
 }
 
-
 .map-stage {
   width: 100%;
   height: 100dvh !important;
@@ -1483,7 +1589,7 @@ button {
 }
 
 @media (max-width: 760px) {
-  .quest-panel {
+  .quest-panel:not(.quest-overlay) {
     position: fixed !important;
     left: 0.5rem !important;
     right: 0.5rem !important;
@@ -1496,6 +1602,18 @@ button {
 
     overflow-y: auto !important;
     z-index: 1000;
+  }
+
+  .quest-panel.quest-overlay {
+    position: fixed !important;
+    left: 50% !important;
+    top: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: calc(100% - 1.2rem) !important;
+    max-height: calc(100vh - 4rem) !important;
+    z-index: 1001 !important;
   }
 
   .quest-panel h2 {
@@ -1511,68 +1629,6 @@ button {
   }
 }
 
-.top-hud {
-  position: fixed !important;
-  top: 1rem !important;
-  left: 4rem !important;
-  right: 1rem !important;
-  z-index: 9998 !important;
-}
-
-.bottom-nav {
-  position: fixed !important;
-  bottom: 1rem !important;
-  left: 4rem !important;
-  right: 1rem !important;
-  z-index: 9998 !important;
-}
-
-@media (max-width: 760px) {
-  .top-hud {
-    top: 0.75rem !important;
-    left: 4rem !important;
-    right: 0.75rem !important;
-  }
-
-  .bottom-nav {
-    bottom: 0.75rem !important;
-    left: 4rem !important;
-    right: 0.75rem !important;
-  }
-}
-
-@media (max-width: 760px) {
-  .map-view {
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100dvh !important;
-    overflow: hidden !important;
-  }
-
-  .map-stage {
-    height: 58dvh !important;
-    max-height: 58dvh !important;
-    overflow: auto !important;
-  }
-
-  .quest-panel {
-    position: relative !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    top: auto !important;
-
-    width: auto !important;
-    margin: 0.5rem !important;
-    height: calc(42dvh - 1rem) !important;
-    max-height: calc(42dvh - 1rem) !important;
-    min-height: 0 !important;
-
-    overflow-y: auto !important;
-    z-index: 10 !important;
-  }
-}
-
 .map-stage {
   direction: ltr !important;
 }
@@ -1580,3 +1636,4 @@ button {
 .map-canvas {
   direction: rtl !important;
 }
+

@@ -11,6 +11,7 @@ const FALLBACK_ASSETS = {
   OPEN_DOOR: "/generated-images/open_door.png",
   TREASURE_CHEST: "/generated-images/treasure_chest.png",
   KNOWLEDGE_CARD: "/generated-images/knowledge_card.png",
+  KEY: "/generated-images/key.png",
   OBSTACLE_TOKEN: "/generated-images/obstacle_token.png",
   STUDENT_EXPLORER: "/generated-images/student_explorer.png",
 };
@@ -92,6 +93,7 @@ function normalizeProgress(progress = {}) {
     completedDoors: Array.isArray(progress.completedDoors) ? progress.completedDoors : [],
     resolvedObstacles: Array.isArray(progress.resolvedObstacles) ? progress.resolvedObstacles : [],
     cards: Array.isArray(progress.cards) ? progress.cards : [],
+    keys: Array.isArray(progress.keys) ? progress.keys : [],
     xp: Number.isFinite(progress.xp) ? progress.xp : 0,
     achievements: Array.isArray(progress.achievements) ? progress.achievements.slice(0, 12) : [],
   };
@@ -130,18 +132,19 @@ function restoreMapScrollTop(shell, scrollTop) {
 function scrollToPlayer(shell) {
   const mapStage = shell?.querySelector(".map-stage");
   const player = shell?.querySelector(".player-marker");
-
   if (!mapStage || !player) return;
 
-  const playerCenterX = player.offsetLeft + player.offsetWidth / 2;
-  const playerCenterY = player.offsetTop + player.offsetHeight / 2;
+  const playerRect = player.getBoundingClientRect();
+  const stageRect = mapStage.getBoundingClientRect();
+  const playerCenterX = playerRect.left + playerRect.width / 2;
+  const playerCenterY = playerRect.top + playerRect.height / 2;
 
-  const targetLeft = playerCenterX - mapStage.clientWidth / 2;
-  const targetTop = playerCenterY - mapStage.clientHeight / 2;
+  const targetLeft = mapStage.scrollLeft + (playerCenterX - stageRect.left - mapStage.clientWidth / 2);
+  const targetTop = mapStage.scrollTop + (playerCenterY - stageRect.top - mapStage.clientHeight / 2);
 
   mapStage.scrollTo({
-    left: Math.max(0, targetLeft),
-    top: Math.max(0, targetTop),
+    left: Math.max(0, Math.min(targetLeft, mapStage.scrollWidth - mapStage.clientWidth)),
+    top: Math.max(0, Math.min(targetTop, mapStage.scrollHeight - mapStage.clientHeight)),
     behavior: "auto",
   });
 }
@@ -171,8 +174,15 @@ let selectedDoorId = DEFAULT_CONTENT.doors[0]?.id || "";
   let phase = 0;
   let feedback = "";
   let rewardAnimation = null;
-let hitAnimation = null;
+  let rewardQueue = [];
+  let rewardTimeout = null;
+  let hitAnimation = null;
+  let panelOpen = false;
   let miniPick = [];
+  let currentQuestionIndex = 0;
+  let currentQuestionAttempts = 0;
+  let currentQuestionScore = 0;
+  let currentQuestionMaxScore = 0;
   let usedSabrBoost = false;
   let adminMode = "doors";
   let hudCollapsed = true;
@@ -341,9 +351,54 @@ async function loadSave() {
     progress.achievements = [{ text, at: new Date().toLocaleDateString("ar") }, ...progress.achievements].slice(0, 10);
   }
 
-function showCardReward(card) {
+function makeDoorKeyName(title) {
+  return `مفتاح ${String(title || "").replace(/^باب\s*/i, "")}`;
+}
+
+function pushReward(reward) {
+  if (!reward || !reward.type) return;
+  rewardQueue.push(reward);
+  console.log("pushReward:", reward.type, "الطابور الآن:", rewardQueue.map(r => r.type));
+  if (!rewardAnimation) {
+    showNextReward();
+  }
+}
+
+function showCardReward(card, doorId) {
   if (!card) return;
-  rewardAnimation = card;
+  pushReward({ type: "card", item: { ...card, doorId, saved: false } });
+}
+
+function showKeyReward(key) {
+  if (!key) return;
+  pushReward({ type: "key", item: { ...key, subtitle: key.subtitle || "مفتاح" } });
+}
+
+function clearRewardAnimation() {
+  if (rewardTimeout) {
+    clearTimeout(rewardTimeout);
+    rewardTimeout = null;
+  }
+}
+
+function showNextReward() {
+  clearRewardAnimation();
+  rewardAnimation = rewardQueue.shift() || null;
+  console.log("showNextReward يعرض الآن:", rewardAnimation?.type, "متبقي في الطابور:", rewardQueue.map(r => r.type));
+  render();
+  if (rewardAnimation) {
+    const duration = rewardAnimation.type === "key" ? 1500 : 2000;
+    rewardTimeout = setTimeout(() => {
+      console.log("انتهى عرض:", rewardAnimation?.type);
+      rewardAnimation = null;
+      rewardTimeout = null;
+      if (rewardQueue.length > 0) {
+        showNextReward();
+      } else {
+        render();
+      }
+    }, duration);
+  }
 }
 
 function showObstacleHit(obstacle) {
@@ -363,27 +418,35 @@ async function completeDoor(door) {
   let nextBlocked = false;
 
   if (!progress.completedDoors.includes(door.id)) {
-    progress.completedDoors.push(door.id);
-    progress.xp += Number(door.xp) || 80;
+      const questions = getDoorQuestions(door);
+      const threshold = Math.ceil(currentQuestionMaxScore * 0.8);      const earnedCard = currentQuestionMaxScore > 0 && currentQuestionScore >= threshold;
+      const card = content.cards.find((item) => item.id === door.cardId);
 
-    if (door.cardId && !progress.cards.includes(door.cardId)) {
-      progress.cards.push(door.cardId);
-    }
+      progress.completedDoors.push(door.id);
+      progress.xp += Number(door.xp) || 80;
 
-    const card = content.cards.find((item) => item.id === door.cardId);
+      const keyId = door.id;
+      const keyName = makeDoorKeyName(door.title);
+      if (!progress.keys.includes(keyId)) {
+        progress.keys.push(keyId);
+        showKeyReward({ id: keyId, title: keyName, subtitle: `حصلت على ${keyName}` });
+      }
 
-    if (card) {
-      showCardReward(card);
-    }
+      if (earnedCard && card && door.cardId && !progress.cards.includes(door.cardId)) {
+        progress.cards.push(door.cardId);
+        showCardReward(card, door.id);
+      } else if (!earnedCard && door.cardId) {
+        progress.cards = progress.cards.filter((cardId) => cardId !== door.cardId);
+      }
 
-    addAchievement(`أكملت ${door.title}${card ? ` وحصلت على ${card.title}` : ""}`);
+    addAchievement(`أكملت ${door.title}${earnedCard && card ? ` وحصلت على ${card.title}` : ""} وحصلت على ${keyName}`);
 
     playTone("success");
     pulse(40);
 
     if (authToken) {
       try {
-        await completeDoorOnServer(authToken, door.id, door.cardId);
+        await completeDoorOnServer(authToken, door.id, door.id, currentQuestionScore, currentQuestionMaxScore);
         renderSaveState("تم الحفظ في الحساب");
       } catch (error) {
         console.error("تعذر حفظ الباب في السيرفر:", error);
@@ -416,6 +479,7 @@ async function completeDoor(door) {
 
   phase = 0;
   miniPick = [];
+  panelOpen = false;
 
   render();
 }
@@ -453,6 +517,7 @@ async function resolveObstacle(obstacle, viaCard = false) {
   selectedDoorId = nextDoor?.id || obstacle.gateAfter;
   phase = 0;
   feedback = "انفتح الطريق. يمكنك دخول الباب التالي الآن.";
+  panelOpen = false;
 
   render();
 }
@@ -461,26 +526,157 @@ async function resolveObstacle(obstacle, viaCard = false) {
     phase = 0;
     feedback = "";
     miniPick = [];
+    currentQuestionIndex = 0;
+    currentQuestionAttempts = 0;
+    currentQuestionScore = 0;
+    currentQuestionMaxScore = 0;
     usedSabrBoost = false;
+  }
+
+  function getDoorQuestions(door) {
+    if (Array.isArray(door.questions) && door.questions.length > 0) {
+      return door.questions;
+    }
+
+    return [
+      {
+        type: "mcq",
+        prompt: door.quiz.prompt,
+        options: door.quiz.options,
+        answerIndex: door.quiz.answerIndex,
+        points: 10,
+      },
+      {
+        type: "mcq",
+        prompt: door.scenario.prompt,
+        options: door.scenario.options,
+        answerIndex: door.scenario.answerIndex,
+        points: 10,
+      },
+      {
+        type: "order",
+        prompt: door.mini.prompt,
+        items: door.mini.items,
+        correct: door.mini.correct,
+        points: 10,
+      },
+    ];
+  }
+
+  function startDoorChallenge(door) {
+    const questions = getDoorQuestions(door);
+    currentQuestionIndex = 0;
+    currentQuestionAttempts = 0;
+    currentQuestionScore = 0;
+    currentQuestionMaxScore = questions.reduce((sum, question) => sum + (Number(question.points) || 10), 0);
+    feedback = "";
+    phase = 1;
+    miniPick = [];
+    render();
+  }
+
+  function awardQuestionPoints(question, attempts = 0) {
+    const value = Number(question.points) || 10;
+    const multiplier = Math.max(0.1, 1 - (attempts * 0.2));
+    const score = Math.ceil(value * multiplier);
+    currentQuestionScore += score;
+    return score;
+  }
+
+  function nextQuestion() {
+    currentQuestionIndex += 1;
+    currentQuestionAttempts = 0;
+    miniPick = [];
+    const questions = getDoorQuestions(content.doors.find((door) => door.id === selectedDoorId));
+    if (currentQuestionIndex >= questions.length) {
+      currentQuestionIndex = questions.length;
+    }
+    render();
   }
 
   function handleAnswer(kind, index) {
     const door = content.doors.find((item) => item.id === selectedDoorId);
     if (!door) return;
-    const challenge = kind === "quiz" ? door.quiz : door.scenario;
-    if (Number(index) === Number(challenge.answerIndex)) {
-      feedback = "إجابة موفقة. تقدّم للخطوة التالية.";
-      phase += 1;
+    const questions = getDoorQuestions(door);
+    const question = questions[currentQuestionIndex];
+    if (!question) return;
+
+    const selectedIndex = Number(index);
+    const isCorrect = selectedIndex === Number(question.answerIndex);
+
+    if (isCorrect) {
+      const points = awardQuestionPoints(question, currentQuestionAttempts);
+      const totalValue = Number(question.points) || 10;
+      if (currentQuestionAttempts === 0) {
+        feedback = `إجابة صحيحة! حصلت على كامل النقاط: ${points} نقطة.`;
+      } else {
+        feedback = `إجابة صحيحة! حصلت على ${points} من ${totalValue} نقطة (بعد ${currentQuestionAttempts} محاولة خاطئة).`;
+      }
       playTone("success");
       pulse(20);
-    } else if (progress.cards.includes("sabr") && !usedSabrBoost) {
-      usedSabrBoost = true;
-      feedback = "ليست هذه الإجابة. بطاقة الصبر منحتك فرصة هادئة لإعادة التفكير.";
-      playTone("error");
-    } else {
-      feedback = "اقتربت من الفكرة، راجع الشرح وحاول مرة أخرى.";
-      playTone("error");
+      nextQuestion();
+      return;
     }
+
+    currentQuestionAttempts += 1;
+    const potentialPoints = Math.ceil((Number(question.points) || 10) * Math.max(0.1, 1 - (currentQuestionAttempts * 0.2)));
+    const totalValue = Number(question.points) || 10;
+
+    if (currentQuestionAttempts === 1) {
+      feedback = `للأسف خطأ. حاول مرة أخرى بتركيز أكبر. (النقاط المتاحة الآن: ${potentialPoints} من ${totalValue})`;
+    } else {
+      feedback = `خطأ مجددًا (${currentQuestionAttempts} محاولات). فكّر جيدًا ثم حاول. (النقاط المتاحة: ${potentialPoints} من ${totalValue})`;
+    }
+
+    playTone("error");
+    render();
+  }
+
+  function handleSequenceAnswer(item) {
+    const door = content.doors.find((entry) => entry.id === selectedDoorId);
+    if (!door) return;
+    const questions = getDoorQuestions(door);
+    const question = questions[currentQuestionIndex];
+    if (!question || question.type !== "order") return;
+    if (miniPick.includes(item)) return;
+
+    miniPick.push(item);
+    const correctSequence = question.correct || [];
+    const stillValid = miniPick.every((choice, index) => choice === correctSequence[index]);
+
+    if (!stillValid) {
+      currentQuestionAttempts += 1;
+      miniPick = [];
+      const potentialPoints = Math.ceil((Number(question.points) || 10) * Math.max(0.1, 1 - (currentQuestionAttempts * 0.2)));
+      const totalValue = Number(question.points) || 10;
+
+      if (currentQuestionAttempts === 1) {
+        feedback = `الترتيب غير صحيح، حاول مرة أخرى. (النقاط المتاحة الآن: ${potentialPoints} من ${totalValue})`;
+      } else {
+        feedback = `الترتيب خاطئ مجددًا (${currentQuestionAttempts} محاولات). أعد التفكير. (النقاط المتاحة: ${potentialPoints} من ${totalValue})`;
+      }
+
+      playTone("error");
+      render();
+      return;
+    }
+
+    if (miniPick.length === correctSequence.length) {
+      const points = awardQuestionPoints(question, currentQuestionAttempts);
+      const totalValue = Number(question.points) || 10;
+      if (currentQuestionAttempts === 0) {
+        feedback = `رتّبتها بشكل صحيح من المحاولة الأولى! حصلت على ${points} نقطة.`;
+      } else {
+        feedback = `رتّبتها بشكل صحيح! حصلت على ${points} من ${totalValue} نقطة (بعد ${currentQuestionAttempts} محاولة خاطئة).`;
+      }
+      playTone("success");
+      pulse(20);
+      nextQuestion();
+      return;
+    }
+
+    feedback = "اختيار صحيح حتى الآن، أكمل الترتيب.";
+    playTone("tap");
     render();
   }
 
@@ -534,6 +730,7 @@ if (action === "toggle-nav") {
 
     if (action === "tab") {
       selectedObstacleId = null;
+      panelOpen = false;
       shell.dataset.view = id;
       render();
     }
@@ -548,17 +745,21 @@ if (action === "toggle-nav") {
         selectedObstacleId = null;
         selectedDoorId = id;
       }
+      panelOpen = true;
       resetChallenge();
       render();
     }
     if (action === "lesson-next") {
-      phase = 1;
-      feedback = "";
-      render();
+      const door = content.doors.find((item) => item.id === selectedDoorId);
+      if (door) startDoorChallenge(door);
     }
     if (action === "answer-quiz") handleAnswer("quiz", button.dataset.index);
     if (action === "answer-scenario") handleAnswer("scenario", button.dataset.index);
-    if (action === "mini-pick") handleMiniPick(button.dataset.value);
+    if (action === "complete-challenge") {
+      const door = content.doors.find((item) => item.id === selectedDoorId);
+      if (door) completeDoor(door);
+    }
+    if (action === "mini-pick") handleSequenceAnswer(button.dataset.value);
     if (action === "hint") {
       feedback = "تلميح بطاقة العلم: ابحث عن العلاقة بين النية والفهم والعمل، وليس عن حفظ العبارة فقط.";
       render();
@@ -615,6 +816,10 @@ if (action === "toggle-nav") {
     }
     if (action === "edit-card") {
       editingCardId = id;
+      render();
+    }
+    if (action === "close-overlay") {
+      panelOpen = false;
       render();
     }
     if (action === "new-card") {
@@ -784,9 +989,15 @@ shell.insertAdjacentHTML(
   saveIndicator = shell.querySelector(".save-indicator");
   renderSaveState();
 
-requestAnimationFrame(() => {
-  scrollToPlayer(shell);
-});
+  const mapBg = shell.querySelector(".map-bg");
+  const scrollToPlayerIfReady = () => scrollToPlayer(shell);
+
+  requestAnimationFrame(() => {
+    scrollToPlayerIfReady();
+    if (mapBg && !mapBg.complete) {
+      mapBg.addEventListener("load", scrollToPlayerIfReady, { once: true });
+    }
+  });
 }
 
   function navButton(id, label, icon, current) {
@@ -806,6 +1017,7 @@ requestAnimationFrame(() => {
       unlocked: content.doors.filter((_, index) => isDoorUnlocked(index)).length,
       locked: content.doors.length - content.doors.filter((_, index) => isDoorUnlocked(index)).length,
       cards: progress.cards.length,
+      keys: progress.keys.length,
       xp: progress.xp,
       level,
       next,
@@ -817,19 +1029,36 @@ requestAnimationFrame(() => {
 function renderRewardAnimation() {
   if (!rewardAnimation) return "";
 
-  const card = rewardAnimation;
-  rewardAnimation = null;
+  const { type, item } = rewardAnimation;
 
-  return `
-    <div class="reward-animation">
-      <div class="reward-card-pop">
-        <div class="reward-rays"></div>
-        <img src="${assetUrls.KNOWLEDGE_CARD}" alt="" draggable="false" />
-        <strong>${escapeHtml(card.title || "بطاقة جديدة")}</strong>
-        <span>${escapeHtml(card.power || "حصلت على بطاقة جديدة")}</span>
+  if (type === "card") {
+    const card = item;
+    return `
+      <div class="reward-animation">
+        <div class="reward-card-pop">
+          <div class="reward-rays"></div>
+          <img src="${assetUrls.KNOWLEDGE_CARD}" alt="" draggable="false" />
+          <strong>${escapeHtml(card.title || "بطاقة جديدة")}</strong>
+          <span>${escapeHtml(card.power || "حصلت على بطاقة جديدة")}</span>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  }
+
+  if (type === "key") {
+    const key = item;
+    return `
+      <div class="reward-animation">
+        <div class="reward-key-pop">
+          <img src="${assetUrls.KEY}" alt="مفتاح" draggable="false" />
+          <strong>${escapeHtml(key.title || "مفتاح جديد")}</strong>
+          <span>${escapeHtml(key.subtitle || "مفتاح")}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return "";
 }
 
 function renderHitAnimation() {
@@ -843,9 +1072,20 @@ function renderHitAnimation() {
   `;
 }
 
-function renderMap(stats) {
+function renderTreasure() {
   return `
-    <div class="map-view">
+      <div class="treasure-goal" style="--x:50%;--y:4%">
+        <img src="${assetUrls.TREASURE_CHEST}" alt="كنز ميراث النبوة" draggable="false" />
+      </div>
+    `;
+}
+
+function renderMap(stats) {
+  const panelContent = selectedObstacleId ? renderObstaclePanel() : renderDoorPanel(stats);
+  const isOverlayOpen = panelOpen;
+
+  return `
+    <div class="map-view ${isOverlayOpen ? "has-overlay" : ""}">
       <section class="map-stage" aria-label="خريطة الرحلة">
         <div class="map-canvas">
           <img class="map-bg" src="${assetUrls.MAP_BACKDROP}" alt="" draggable="false" />
@@ -857,20 +1097,13 @@ function renderMap(stats) {
           </div>
         </div>
       </section>
-      <aside class="quest-panel">
-        ${selectedObstacleId ? renderObstaclePanel() : renderDoorPanel(stats)}
-      </aside>
+
+      ${isOverlayOpen ? `<div class="map-overlay-backdrop"></div>` : ""}
+
+      ${isOverlayOpen ? `<aside class="quest-panel quest-overlay">${panelContent}<button class="overlay-close" data-action="close-overlay" aria-label="إغلاق">×</button></aside>` : ""}
     </div>
   `;
 }
-
-  function renderTreasure() {
-    return `
-      <div class="treasure-goal" style="--x:50%;--y:4%">
-        <img src="${assetUrls.TREASURE_CHEST}" alt="كنز ميراث النبوة" draggable="false" />
-      </div>
-    `;
-  }
 
   function renderDoorNodes() {
     const completed = completedSet();
@@ -999,15 +1232,55 @@ function renderPlayerMarker() {
         </div>
       `;
     }
-    if (phase === 1) return renderOptions("quiz", door.quiz, "تحدي الفهم");
-    if (phase === 2) return renderOptions("scenario", door.scenario, "موقف واقعي");
+
+    if (phase === 1) {
+      const questions = getDoorQuestions(door);
+      const question = questions[currentQuestionIndex];
+      if (!question) {
+        const percentage = currentQuestionMaxScore ? Math.round((currentQuestionScore / currentQuestionMaxScore) * 100) : 0;
+        const threshold = Math.ceil(currentQuestionMaxScore * 0.8);
+        const earnedCard = currentQuestionScore >= threshold;
+        return `
+          <p class="eyebrow">نتيجة التحدي</p>
+          <h3>أكملت الأسئلة</h3>
+          <div class="challenge-summary">
+            <p>حصلت على ${currentQuestionScore} من ${currentQuestionMaxScore} نقطة.</p>
+            <p>النسبة: ${percentage}%</p>
+            <p>${earnedCard ? "لقد نجحت بالحصول على البطاقة والمفتاح." : "حصلت على المفتاح فقط، واحتفظ بالبطاقة للمرة القادمة."}</p>
+          </div>
+          <div class="panel-actions">
+            <button class="primary-button" data-action="complete-challenge">انهِ الباب</button>
+          </div>
+        `;
+      }
+
+      if (question.type === "order") {
+        return `
+          <p class="eyebrow">${escapeHtml(question.prompt)}</p>
+          <div class="mini-board">
+            ${question.items.map((item) => `<button class="chip-button ${miniPick.includes(item) ? "is-picked" : ""}" data-action="mini-pick" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
+          </div>
+          <div class="answer-lane">${miniPick.length ? miniPick.map((item, index) => `<span>${index + 1}. ${escapeHtml(item)}</span>`).join("") : "اختر العناصر بالترتيب الصحيح"}</div>
+          <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+        `;
+      }
+
+      return `
+        <p class="eyebrow">اختر الإجابة الصحيحة</p>
+        <h3>${escapeHtml(question.prompt)}</h3>
+        <div class="option-list">
+          ${(question.options || []).map((option, index) => `<button class="option-button" data-action="answer-quiz" data-index="${index}">${escapeHtml(option)}</button>`).join("")}
+        </div>
+        <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+      `;
+    }
+
     return `
-      <p class="eyebrow">لعبة صغيرة</p>
-      <h3>${escapeHtml(door.mini.prompt)}</h3>
-      <div class="mini-board">
-        ${door.mini.items.map((item) => `<button class="chip-button ${miniPick.includes(item) ? "is-picked" : ""}" data-action="mini-pick" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
+      <p>${escapeHtml(door.summary)}</p>
+      <div class="key-grid">${door.keyPoints.map((point) => `<span>${escapeHtml(point)}</span>`).join("")}</div>
+      <div class="panel-actions">
+        <button class="primary-button" data-action="lesson-next">ابدأ التحدي</button>
       </div>
-      <div class="answer-lane">${miniPick.length ? miniPick.map((item, index) => `<span>${index + 1}. ${escapeHtml(item)}</span>`).join("") : "اختر البطاقات بالترتيب الصحيح"}</div>
     `;
   }
 
@@ -1069,6 +1342,7 @@ function renderStudent(stats) {
         ${statCard("الأبواب المفتوحة", stats.unlocked)}
         ${statCard("الأبواب المغلقة", stats.locked)}
         ${statCard("البطاقات", stats.cards)}
+        ${statCard("المفاتيح", stats.keys)}
         ${statCard("النقاط", stats.xp)}
       </section>
 

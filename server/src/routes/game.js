@@ -75,6 +75,11 @@ router.get("/progress", auth, async (req, res) => {
       [req.user.id]
     );
 
+    const keys = await pool.query(
+      `SELECT key_id FROM user_keys WHERE user_id = $1`,
+      [req.user.id]
+    );
+
     const resolvedObstacles = await pool.query(
       `SELECT obstacle_id FROM user_obstacles WHERE user_id = $1`,
       [req.user.id]
@@ -94,6 +99,7 @@ router.get("/progress", auth, async (req, res) => {
       completedDoors: completedDoors.rows.map((row) => row.door_id),
       resolvedObstacles: resolvedObstacles.rows.map((row) => row.obstacle_id),
       cards: cards.rows.map((row) => row.card_id),
+      keys: keys.rows.map((row) => row.key_id),
       xp: Number(xpResult.rows[0]?.xp || 0),
       achievements: [],
     });
@@ -129,7 +135,7 @@ router.post("/resolve-obstacle", auth, async (req, res) => {
 
 router.post("/complete-door", auth, async (req, res) => {
   try {
-    const { doorId, cardId } = req.body;
+    const { doorId, keyId, score, maxScore } = req.body;
 
     if (!doorId) {
       return res.status(400).json({ message: "doorId مطلوب" });
@@ -146,7 +152,10 @@ router.post("/complete-door", auth, async (req, res) => {
       return res.status(404).json({ message: "الباب غير موجود" });
     }
 
-    const finalCardId = cardId || door.card_id;
+    const finalKeyId = keyId || door.id;
+    const finalScore = Number(score) || 0;
+    const finalMaxScore = Number(maxScore) || 0;
+    const earnedCard = finalMaxScore > 0 && finalScore >= Math.ceil(finalMaxScore * 0.8);
 
     await pool.query(
       `
@@ -158,15 +167,33 @@ router.post("/complete-door", auth, async (req, res) => {
       [req.user.id, doorId]
     );
 
-    if (finalCardId) {
+    if (finalKeyId) {
       await pool.query(
         `
-        INSERT INTO user_cards (user_id, card_id)
-        VALUES ($1, $2)
-        ON CONFLICT (user_id, card_id) DO NOTHING
+        INSERT INTO user_keys (user_id, key_id, door_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, key_id) DO NOTHING
         `,
-        [req.user.id, finalCardId]
+        [req.user.id, finalKeyId, doorId]
       );
+    }
+
+    if (door.card_id) {
+      if (earnedCard) {
+        await pool.query(
+          `
+          INSERT INTO user_cards (user_id, card_id)
+          VALUES ($1, $2)
+          ON CONFLICT (user_id, card_id) DO NOTHING
+          `,
+          [req.user.id, door.card_id]
+        );
+      } else {
+        await pool.query(
+          `DELETE FROM user_cards WHERE user_id = $1 AND card_id = $2`,
+          [req.user.id, door.card_id]
+        );
+      }
     }
 
     res.json({ ok: true });
@@ -176,11 +203,21 @@ router.post("/complete-door", auth, async (req, res) => {
   }
 });
 
+router.post("/award-card", auth, async (req, res) => {
+  try {
+    res.status(410).json({ message: "حفظ البطاقة يتم من نتيجة إكمال الباب فقط" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "تعذر حفظ البطاقة" });
+  }
+});
+
 router.post("/reset-progress", auth, async (req, res) => {
   try {
     await pool.query(`DELETE FROM user_progress WHERE user_id = $1`, [req.user.id]);
     await pool.query(`DELETE FROM user_cards WHERE user_id = $1`, [req.user.id]);
     await pool.query(`DELETE FROM user_obstacles WHERE user_id = $1`, [req.user.id]);
+    await pool.query(`DELETE FROM user_keys WHERE user_id = $1`, [req.user.id]);
 
     res.json({ ok: true });
   } catch (error) {

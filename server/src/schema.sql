@@ -54,3 +54,12 @@ CREATE TABLE IF NOT EXISTS user_cards (
   acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id, card_id)
 );
+
+CREATE TABLE IF NOT EXISTS user_keys (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  key_id TEXT NOT NULL,
+  door_id TEXT REFERENCES doors(id) ON DELETE CASCADE,
+  acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, key_id)
+);

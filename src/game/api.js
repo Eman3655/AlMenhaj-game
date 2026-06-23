@@ -23,7 +23,7 @@ export async function getProgress(token) {
   return response.json();
 }
 
-export async function completeDoorOnServer(token, doorId, cardId) {
+export async function completeDoorOnServer(token, doorId, keyId, score, maxScore) {
   const response = await fetch(`${API_URL}/game/complete-door`, {
     method: "POST",
     headers: {
@@ -32,7 +32,9 @@ export async function completeDoorOnServer(token, doorId, cardId) {
     },
     body: JSON.stringify({
       doorId,
-      cardId,
+      keyId,
+      score,
+      maxScore,
     }),
   });
 
