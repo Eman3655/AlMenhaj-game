@@ -1763,31 +1763,49 @@ function readQuestionFromForm(q) {
     `;
   }
 
-  function renderObstaclePanel() {
-    const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
-    if (!obstacle) return "";
-    const card = content.cards.find((item) => item.id === obstacle.requiredCardId);
-    const ownsCard = progress.cards.includes(obstacle.requiredCardId);
-    return `
-      <p class="eyebrow">عقبة في الطريق</p>
-      <h2>${escapeHtml(obstacle.title)}</h2>
-      <p>${escapeHtml(obstacle.prompt)}</p>
-      <div class="obstacle-card">
-        <img src="${assetUrls.OBSTACLE_TOKEN}" alt="" draggable="false" />
-        <div>
-          <strong>البطاقة المناسبة: ${escapeHtml(card?.title || "غير محددة")}</strong>
-          <span>${ownsCard ? "تملك هذه البطاقة ويمكنك استخدامها." : "يمكنك الإجابة بدلًا من استخدام البطاقة."}</span>
-        </div>
+function renderObstaclePanel() {
+  const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
+  if (!obstacle) return "";
+
+  const hasCard = progress.cards.includes(obstacle.requiredCardId);
+  const card = content.cards.find((c) => c.id === obstacle.requiredCardId);
+
+  const referenceSection = (obstacle.referenceTitle || obstacle.referenceLink)
+    ? `
+      <div class="obstacle-reference" style="margin: 12px 0; padding: 12px; background: rgba(255,255,255,0.1); border-radius: 8px; border-right: 3px solid #fbbf24;">
+        ${obstacle.referenceType ? `<span style="font-size:11px; opacity:0.7; display:block; margin-bottom:4px;">${escapeHtml(obstacle.referenceType)}</span>` : ""}
+        ${obstacle.referenceTitle ? `<strong style="display:block; margin-bottom:6px; font-size:14px;">${escapeHtml(obstacle.referenceTitle)}</strong>` : ""}
+        ${obstacle.referenceLink ? `<a href="${escapeHtml(obstacle.referenceLink)}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; font-size:13px; text-decoration:underline;">🔗 افتح المرجع</a>` : ""}
       </div>
-      <div class="panel-actions">
-        <button class="ghost-button" data-action="use-card">استخدم البطاقة</button>
+    `
+    : "";
+
+  return `
+    <div class="obstacle-panel-content">
+      <h3 style="margin:0 0 12px 0; color:#fbbf24;">⚡ عقبة: ${escapeHtml(obstacle.title)}</h3>
+      
+      ${referenceSection}
+
+      <p style="margin:16px 0; line-height:1.8; font-size:15px;">${escapeHtml(obstacle.prompt)}</p>
+      
+      ${feedback ? `<div style="padding:10px; border-radius:6px; background:rgba(239,68,68,0.15); color:#fca5a5; margin-bottom:12px; font-size:14px;">${escapeHtml(feedback)}</div>` : ""}
+      
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${obstacle.options.map((opt, i) => `
+          <button class="obstacle-option-btn" data-action="answer-obstacle" data-index="${i}" style="padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:#fff; cursor:pointer; text-align:right; font-size:14px; transition:0.2s;">
+            ${escapeHtml(opt)}
+          </button>
+        `).join("")}
       </div>
-      <div class="option-list obstacle-options">
-        ${obstacle.options.map((option, index) => `<button class="option-button" data-action="answer-obstacle" data-index="${index}">${escapeHtml(option)}</button>`).join("")}
-      </div>
-      ${feedback ? `<p class="feedback">${escapeHtml(feedback)}</p>` : ""}
-    `;
-  }
+
+      ${hasCard && card ? `
+        <button data-action="use-card" style="margin-top:12px; width:100%; padding:12px; border-radius:8px; border:1px solid #fbbf24; background:rgba(251,191,36,0.15); color:#fbbf24; cursor:pointer; font-size:14px; font-weight:bold;">
+          🃏 استخدم بطاقة: ${escapeHtml(card.title)}
+        </button>
+      ` : ""}
+    </div>
+  `;
+}
 
 function renderStudent(stats) {
   const completed = completedSet();
