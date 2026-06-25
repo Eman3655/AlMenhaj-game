@@ -61,3 +61,20 @@ export async function resolveObstacleOnServer(token, obstacleId) {
 
   return response.json();
 }
+
+export async function saveDoorOnServer(token, doorData) {
+  const response = await fetch(`${API_URL}/game/save-door`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(doorData),
+  });
+
+  if (!response.ok) {
+    throw new Error("فشل حفظ الباب في السيرفر");
+  }
+
+  return response.json();
+}

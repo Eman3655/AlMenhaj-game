@@ -2,7 +2,7 @@ import { DEFAULT_CONTENT } from "./content.js";
 import mapLayout from "./content/map-layout.json";
 import { renderAuthView } from "./auth-view.js";
 import { getToken, getUser, logout } from "./auth.js";
-import { getContent, getProgress, completeDoorOnServer, resolveObstacleOnServer } from "./api.js";
+import { getContent, getProgress, completeDoorOnServer, resolveObstacleOnServer, saveDoorOnServer } from "./api.js";
 const SAVE_VERSION = 6;
 
 const FALLBACK_ASSETS = {
@@ -78,6 +78,17 @@ function splitList(value) {
     .split(/[،,\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function seededShuffle(arr, seed) {
+  const shuffled = [...arr];
+  let s = seed || 1;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    s = ((s * 1103515245) + 12345) & 0x7fffffff;
+    const j = s % (i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 function getLevel(xp) {
@@ -190,7 +201,10 @@ let navCollapsed = true;
   let editingDoorId = DEFAULT_CONTENT.doors[0]?.id || "";
 let editingCardId = DEFAULT_CONTENT.cards[0]?.id || "";
 let editingObstacleId = DEFAULT_CONTENT.obstacles[0]?.id || "";
-
+let editingQuestionIdx = -1;
+let tempQuestion = null;
+let matchSelections = {};
+let fillAnswer = "";
   function playTone(type = "tap") {
     if (!audioContext) return;
     const oscillator = audioContext.createOscillator();
@@ -358,7 +372,6 @@ function makeDoorKeyName(title) {
 function pushReward(reward) {
   if (!reward || !reward.type) return;
   rewardQueue.push(reward);
-  console.log("pushReward:", reward.type, "الطابور الآن:", rewardQueue.map(r => r.type));
   if (!rewardAnimation) {
     showNextReward();
   }
@@ -384,12 +397,10 @@ function clearRewardAnimation() {
 function showNextReward() {
   clearRewardAnimation();
   rewardAnimation = rewardQueue.shift() || null;
-  console.log("showNextReward يعرض الآن:", rewardAnimation?.type, "متبقي في الطابور:", rewardQueue.map(r => r.type));
   render();
   if (rewardAnimation) {
     const duration = rewardAnimation.type === "key" ? 1500 : 2000;
     rewardTimeout = setTimeout(() => {
-      console.log("انتهى عرض:", rewardAnimation?.type);
       rewardAnimation = null;
       rewardTimeout = null;
       if (rewardQueue.length > 0) {
@@ -416,10 +427,12 @@ setTimeout(() => {
 
 async function completeDoor(door) {
   let nextBlocked = false;
+  let pendingRewards = [];
 
   if (!progress.completedDoors.includes(door.id)) {
       const questions = getDoorQuestions(door);
-      const threshold = Math.ceil(currentQuestionMaxScore * 0.8);      const earnedCard = currentQuestionMaxScore > 0 && currentQuestionScore >= threshold;
+      const threshold = Math.ceil(currentQuestionMaxScore * 0.8);
+      const earnedCard = currentQuestionMaxScore > 0 && currentQuestionScore >= threshold;
       const card = content.cards.find((item) => item.id === door.cardId);
 
       progress.completedDoors.push(door.id);
@@ -429,14 +442,14 @@ async function completeDoor(door) {
       const keyName = makeDoorKeyName(door.title);
       if (!progress.keys.includes(keyId)) {
         progress.keys.push(keyId);
-        showKeyReward({ id: keyId, title: keyName, subtitle: `حصلت على ${keyName}` });
+        pendingRewards.push({ type: "key", item: { id: keyId, title: keyName } });
       }
 
       if (earnedCard && card && door.cardId && !progress.cards.includes(door.cardId)) {
         progress.cards.push(door.cardId);
-        showCardReward(card, door.id);
+        pendingRewards.push({ type: "card", item: card });
       } else if (!earnedCard && door.cardId) {
-        progress.cards = progress.cards.filter((cardId) => cardId !== door.cardId);
+        progress.cards = progress.cards.filter((c) => c !== door.cardId);
       }
 
     addAchievement(`أكملت ${door.title}${earnedCard && card ? ` وحصلت على ${card.title}` : ""} وحصلت على ${keyName}`);
@@ -482,6 +495,10 @@ async function completeDoor(door) {
   panelOpen = false;
 
   render();
+
+  for (const reward of pendingRewards) {
+    pushReward(reward);
+  }
 }
 
 async function resolveObstacle(obstacle, viaCard = false) {
@@ -526,6 +543,8 @@ async function resolveObstacle(obstacle, viaCard = false) {
     phase = 0;
     feedback = "";
     miniPick = [];
+    matchSelections = {};
+    fillAnswer = "";
     currentQuestionIndex = 0;
     currentQuestionAttempts = 0;
     currentQuestionScore = 0;
@@ -537,29 +556,10 @@ async function resolveObstacle(obstacle, viaCard = false) {
     if (Array.isArray(door.questions) && door.questions.length > 0) {
       return door.questions;
     }
-
     return [
-      {
-        type: "mcq",
-        prompt: door.quiz.prompt,
-        options: door.quiz.options,
-        answerIndex: door.quiz.answerIndex,
-        points: 10,
-      },
-      {
-        type: "mcq",
-        prompt: door.scenario.prompt,
-        options: door.scenario.options,
-        answerIndex: door.scenario.answerIndex,
-        points: 10,
-      },
-      {
-        type: "order",
-        prompt: door.mini.prompt,
-        items: door.mini.items,
-        correct: door.mini.correct,
-        points: 10,
-      },
+      { type: "mcq", prompt: door.quiz?.prompt || "", options: door.quiz?.options || [], answerIndex: door.quiz?.answerIndex || 0, points: 10 },
+      { type: "mcq", prompt: door.scenario?.prompt || "", options: door.scenario?.options || [], answerIndex: door.scenario?.answerIndex || 0, points: 10 },
+      { type: "challenge", challengeType: "order", prompt: door.mini?.prompt || "", items: door.mini?.items || [], correct: door.mini?.correct || [], points: 10 },
     ];
   }
 
@@ -587,6 +587,8 @@ async function resolveObstacle(obstacle, viaCard = false) {
     currentQuestionIndex += 1;
     currentQuestionAttempts = 0;
     miniPick = [];
+    matchSelections = {};
+    fillAnswer = "";
     const questions = getDoorQuestions(content.doors.find((door) => door.id === selectedDoorId));
     if (currentQuestionIndex >= questions.length) {
       currentQuestionIndex = questions.length;
@@ -702,22 +704,57 @@ async function resolveObstacle(obstacle, viaCard = false) {
     render();
   }
 
-function handleClick(event) {
+  function handleChange(event) {
+    const el = event.target;
+    if (el.name && el.name.startsWith("match-")) {
+      matchSelections[el.name.replace("match-", "")] = el.value;
+    }
+    if (el.id === "fill-answer-input") {
+      fillAnswer = el.value;
+    }
+  }   
+
+  async function saveDoorQuestionsToServer() {
+    if (!authToken || currentUser?.role?.trim() !== "admin") {
+      await persist();
+      return;
+    }
+    const door = content.doors.find(d => d.id === editingDoorId);
+    if (!door) return;
+    try {
+      await saveDoorOnServer(authToken, {
+        doorId: door.id,
+        title: door.title,
+        summary: door.summary,
+        illustration: door.illustration,
+        keyPoints: door.keyPoints,
+        cardId: door.cardId,
+        xp: door.xp,
+        questions: door.questions || [],
+      });
+      renderSaveState("تم الحفظ في السيرفر");
+    } catch (error) {
+      console.error("تعذر حفظ الأسئلة:", error);
+      renderSaveState("تعذر حفظ الأسئلة");
+    }
+  }
+
+async function handleClick(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
   const action = button.dataset.action;
   if (action === "toggle-hud") {
-  hudCollapsed = !hudCollapsed;
-  render();
-  return;
-}
+    hudCollapsed = !hudCollapsed;
+    render();
+    return;
+  }
 
-if (action === "toggle-nav") {
-  navCollapsed = !navCollapsed;
-  render();
-  return;
-}
+  if (action === "toggle-nav") {
+    navCollapsed = !navCollapsed;
+    render();
+    return;
+  }
   const id = button.dataset.id;
 
   if (action === "logout") {
@@ -728,161 +765,397 @@ if (action === "toggle-nav") {
 
   playTone("tap");
 
-    if (action === "tab") {
+  if (action === "tab") {
+    selectedObstacleId = null;
+    panelOpen = false;
+    shell.dataset.view = id;
+    render();
+  }
+  if (action === "select-door") {
+    const index = getDoorIndex(id);
+    const blocker = getBlockingObstacleForDoor(index);
+    if (blocker && completedSet().has(content.doors[index - 1]?.id)) {
+      selectedObstacleId = blocker.id;
+      selectedDoorId = id;
+      feedback = "";
+    } else {
       selectedObstacleId = null;
-      panelOpen = false;
-      shell.dataset.view = id;
+      selectedDoorId = id;
+    }
+    panelOpen = true;
+    resetChallenge();
+    render();
+  }
+  if (action === "lesson-next") {
+    const door = content.doors.find((item) => item.id === selectedDoorId);
+    if (door) startDoorChallenge(door);
+  }
+  if (action === "answer-quiz") handleAnswer("quiz", button.dataset.index);
+  if (action === "answer-scenario") handleAnswer("scenario", button.dataset.index);
+  if (action === "complete-challenge") {
+    const door = content.doors.find((item) => item.id === selectedDoorId);
+    if (door) completeDoor(door);
+  }
+  if (action === "mini-pick") handleSequenceAnswer(button.dataset.value);
+  if (action === "hint") {
+    feedback = "تلميح بطاقة العلم: ابحث عن العلاقة بين النية والفهم والعمل، وليس عن حفظ العبارة فقط.";
+    render();
+  }
+  if (action === "use-card") {
+    const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
+    if (obstacle && progress.cards.includes(obstacle.requiredCardId)) resolveObstacle(obstacle, true);
+    else {
+      feedback = "لا تملك البطاقة المناسبة بعد؛ يمكنك تجاوز العقبة بالإجابة عن سؤالها.";
       render();
     }
-    if (action === "select-door") {
-      const index = getDoorIndex(id);
-      const blocker = getBlockingObstacleForDoor(index);
-      if (blocker && completedSet().has(content.doors[index - 1]?.id)) {
-        selectedObstacleId = blocker.id;
-        selectedDoorId = id;
-        feedback = "";
-      } else {
-        selectedObstacleId = null;
-        selectedDoorId = id;
-      }
-      panelOpen = true;
-      resetChallenge();
+  }
+  if (action === "answer-obstacle") {
+    const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
+    if (!obstacle) return;
+    if (Number(button.dataset.index) === Number(obstacle.answerIndex)) resolveObstacle(obstacle, false);
+    else {
+      feedback = "العقبة ما زالت قائمة. اختر علاجًا أقرب للمفهوم.";
+      playTone("error");
       render();
     }
-    if (action === "lesson-next") {
-      const door = content.doors.find((item) => item.id === selectedDoorId);
-      if (door) startDoorChallenge(door);
-    }
-    if (action === "answer-quiz") handleAnswer("quiz", button.dataset.index);
-    if (action === "answer-scenario") handleAnswer("scenario", button.dataset.index);
-    if (action === "complete-challenge") {
-      const door = content.doors.find((item) => item.id === selectedDoorId);
-      if (door) completeDoor(door);
-    }
-    if (action === "mini-pick") handleSequenceAnswer(button.dataset.value);
-    if (action === "hint") {
-      feedback = "تلميح بطاقة العلم: ابحث عن العلاقة بين النية والفهم والعمل، وليس عن حفظ العبارة فقط.";
-      render();
-    }
-    if (action === "use-card") {
-      const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
-      if (obstacle && progress.cards.includes(obstacle.requiredCardId)) resolveObstacle(obstacle, true);
-      else {
-        feedback = "لا تملك البطاقة المناسبة بعد؛ يمكنك تجاوز العقبة بالإجابة عن سؤالها.";
-        render();
-      }
-    }
-    if (action === "answer-obstacle") {
-      const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
-      if (!obstacle) return;
-      if (Number(button.dataset.index) === Number(obstacle.answerIndex)) resolveObstacle(obstacle, false);
-      else {
-        feedback = "العقبة ما زالت قائمة. اختر علاجًا أقرب للمفهوم.";
-        playTone("error");
-        render();
-      }
-    }
-    if (action === "admin-mode") {
-      adminMode = id;
-      render();
-    }
-    if (action === "edit-door") {
-      editingDoorId = id;
-      render();
-    }
-    if (action === "new-door") {
-      const newDoor = {
-        ...clone(DEFAULT_CONTENT.doors[0]),
-        id: uid("door"),
-        title: "باب جديد",
-        summary: "اكتب شرحًا مختصرًا ومناسبًا للطلاب.",
-        cardId: content.cards[0]?.id || "",
-      };
-      content.doors.push(newDoor);
-      editingDoorId = newDoor.id;
-      selectedDoorId = newDoor.id;
-      persist();
-      render();
-    }
-    if (action === "delete-door") {
-      if (content.doors.length <= 1) return;
-      content.doors = content.doors.filter((door) => door.id !== id);
-      content.obstacles = content.obstacles.filter((obstacle) => obstacle.gateAfter !== id);
-      progress.completedDoors = progress.completedDoors.filter((doorId) => doorId !== id);
-      selectedDoorId = content.doors[0]?.id || "";
-      editingDoorId = selectedDoorId;
-      persist();
-      render();
-    }
-    if (action === "edit-card") {
-      editingCardId = id;
-      render();
-    }
-    if (action === "close-overlay") {
-      panelOpen = false;
-      render();
-    }
-    if (action === "new-card") {
-      const newCard = { id: uid("card"), title: "بطاقة جديدة", icon: "نجمة", power: "اكتب أثر البطاقة داخل الرحلة." };
-      content.cards.push(newCard);
-      editingCardId = newCard.id;
-      persist();
-      render();
-    }
-    if (action === "delete-card") {
-      content.cards = content.cards.filter((card) => card.id !== id);
-      progress.cards = progress.cards.filter((cardId) => cardId !== id);
-      editingCardId = content.cards[0]?.id || "";
-      persist();
-      render();
-    }
-    if (action === "edit-obstacle") {
-      editingObstacleId = id;
-      render();
-    }
-    if (action === "new-obstacle") {
-      const newObstacle = {
-        id: uid("obstacle"),
-        title: "عقبة جديدة",
-        gateAfter: content.doors[0]?.id || "",
-        requiredCardId: content.cards[0]?.id || "",
-        prompt: "ما التصرف المناسب لتجاوز هذه العقبة؟",
-        options: ["اختيار صحيح", "اختيار بعيد", "اختيار مشتت"],
-        answerIndex: 0,
-      };
-      content.obstacles.push(newObstacle);
-      editingObstacleId = newObstacle.id;
-      persist();
-      render();
-    }
-    if (action === "delete-obstacle") {
-      content.obstacles = content.obstacles.filter((obstacle) => obstacle.id !== id);
-      progress.resolvedObstacles = progress.resolvedObstacles.filter((obstacleId) => obstacleId !== id);
-      editingObstacleId = content.obstacles[0]?.id || "";
-      persist();
-      render();
-    }
-    if (action === "reset-progress") {
-      progress = normalizeProgress();
-      resetChallenge();
-      persist();
-      render();
-    }
-if (action === "reset-content") {
-  content = clone(DEFAULT_CONTENT);
-  progress = normalizeProgress();
-
-  selectedDoorId = content.doors[0]?.id || "";
-  editingDoorId = content.doors[0]?.id || "";
-  editingCardId = content.cards[0]?.id || "";
-  editingObstacleId = content.obstacles[0]?.id || "";
-
-  persist();
-  render();
-}
   }
 
-  function handleSubmit(event) {
+  if (action === "add-question") {
+    const type = button.dataset.type || "mcq";
+    const door = content.doors.find(d => d.id === editingDoorId);
+    if (!door) return;
+    if (!Array.isArray(door.questions)) door.questions = [];
+    editingQuestionIdx = -2;
+    tempQuestion = getEmptyQuestion(type);
+    render();
+    return;
+  }
+  if (action === "edit-question") {
+    const idx = Number(button.dataset.index);
+    const door = content.doors.find(d => d.id === editingDoorId);
+    if (!door || !door.questions[idx]) return;
+    editingQuestionIdx = idx;
+    tempQuestion = clone(door.questions[idx]);
+    render();
+    return;
+  }
+    if (action === "save-question") {
+      if (!tempQuestion) return;
+      const door = content.doors.find(d => d.id === editingDoorId);
+      if (!door) return;
+      if (!Array.isArray(door.questions)) door.questions = [];
+      tempQuestion = readQuestionFromForm(tempQuestion);
+      if (editingQuestionIdx === -2) {
+        door.questions.push(tempQuestion);
+      } else {
+        door.questions[editingQuestionIdx] = tempQuestion;
+      }
+      editingQuestionIdx = -1;
+      tempQuestion = null;
+      await saveDoorQuestionsToServer();
+      render();
+      return;
+    }
+  if (action === "cancel-question") {
+    editingQuestionIdx = -1;
+    tempQuestion = null;
+    render();
+    return;
+  }
+    if (action === "delete-question") {
+      const door = content.doors.find(d => d.id === editingDoorId);
+      if (!door || !Array.isArray(door.questions)) return;
+      const idx = Number(button.dataset.index);
+      door.questions.splice(idx, 1);
+      if (editingQuestionIdx === idx) { editingQuestionIdx = -1; tempQuestion = null; }
+      else if (editingQuestionIdx > idx) editingQuestionIdx--;
+      await saveDoorQuestionsToServer();
+      render();
+      return;
+    }
+    if (action === "move-question") {
+      const door = content.doors.find(d => d.id === editingDoorId);
+      if (!door || !Array.isArray(door.questions)) return;
+      const idx = Number(button.dataset.index);
+      const dir = button.dataset.dir === "up" ? -1 : 1;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= door.questions.length) return;
+      [door.questions[idx], door.questions[newIdx]] = [door.questions[newIdx], door.questions[idx]];
+      await saveDoorQuestionsToServer();
+      render();
+      return;
+    }
+  if (action === "change-q-type") {
+    if (!tempQuestion) return;
+    const newType = button.dataset.type || "mcq";
+    tempQuestion = getEmptyQuestion(newType);
+    render();
+    return;
+  }
+  if (action === "add-mcq-option") {
+    if (!tempQuestion) return;
+    tempQuestion.options.push("");
+    render();
+    return;
+  }
+  if (action === "remove-mcq-option") {
+    if (!tempQuestion) return;
+    tempQuestion.options.splice(Number(button.dataset.index), 1);
+    if (tempQuestion.answerIndex >= tempQuestion.options.length) tempQuestion.answerIndex = 0;
+    render();
+    return;
+  }
+  if (action === "add-match-pair") {
+    if (!tempQuestion) return;
+    tempQuestion.pairs.push({ left: "", right: "" });
+    render();
+    return;
+  }
+  if (action === "remove-match-pair") {
+    if (!tempQuestion) return;
+    tempQuestion.pairs.splice(Number(button.dataset.index), 1);
+    render();
+    return;
+  }
+  if (action === "add-fill-answer") {
+    if (!tempQuestion) return;
+    tempQuestion.acceptableAnswers.push("");
+    render();
+    return;
+  }
+  if (action === "remove-fill-answer") {
+    if (!tempQuestion) return;
+    tempQuestion.acceptableAnswers.splice(Number(button.dataset.index), 1);
+    render();
+    return;
+  }
+  if (action === "add-challenge-item") {
+    if (!tempQuestion) return;
+    tempQuestion.items.push("");
+    render();
+    return;
+  }
+  if (action === "remove-challenge-item") {
+    if (!tempQuestion) return;
+    tempQuestion.items.splice(Number(button.dataset.index), 1);
+    render();
+    return;
+  }
+  if (action === "add-challenge-correct") {
+    if (!tempQuestion) return;
+    tempQuestion.correct.push("");
+    render();
+    return;
+  }
+  if (action === "remove-challenge-correct") {
+    if (!tempQuestion) return;
+    tempQuestion.correct.splice(Number(button.dataset.index), 1);
+    render();
+    return;
+  }
+
+  if (action === "answer-tf") {
+    const door = content.doors.find((item) => item.id === selectedDoorId);
+    if (!door) return;
+    const questions = getDoorQuestions(door);
+    const question = questions[currentQuestionIndex];
+    if (!question) return;
+    const isCorrect = button.dataset.value === String(question.correctAnswer);
+    if (isCorrect) {
+      const points = awardQuestionPoints(question, currentQuestionAttempts);
+      feedback = `إجابة صحيحة! حصلت على ${points} نقطة.`;
+      playTone("success"); pulse(20); nextQuestion();
+    } else {
+      currentQuestionAttempts += 1;
+      const pp = Math.ceil((Number(question.points) || 10) * Math.max(0.1, 1 - (currentQuestionAttempts * 0.2)));
+      feedback = `خطأ! حاول مرة أخرى. (النقاط المتاحة: ${pp} من ${question.points || 10})`;
+      playTone("error"); render();
+    }
+    return;
+  }
+  if (action === "submit-match") {
+    const door = content.doors.find((entry) => entry.id === selectedDoorId);
+    if (!door) return;
+    const questions = getDoorQuestions(door);
+    const question = questions[currentQuestionIndex];
+    if (!question || question.type !== "match") return;
+    const pairs = question.pairs || [];
+    const seed = currentQuestionIndex * 1000 + 42;
+    const displayPairs = seededShuffle(pairs, seed);
+    let allSelected = true;
+    let correctCount = 0;
+    displayPairs.forEach((pair, i) => {
+      const selected = matchSelections[String(i)] || matchSelections[i];
+      if (!selected) { allSelected = false; return; }
+      if (selected === pair.right) correctCount++;
+    });
+    if (!allSelected) { feedback = "يرجى توصيل جميع العناصر قبل التحقق."; render(); return; }
+    if (correctCount === pairs.length) {
+      const points = awardQuestionPoints(question, currentQuestionAttempts);
+      feedback = `توصيل صحيح! حصلت على ${points} نقطة.`;
+      playTone("success"); pulse(20); nextQuestion();
+    } else {
+      currentQuestionAttempts += 1;
+      matchSelections = {};
+      const pp = Math.ceil((Number(question.points) || 10) * Math.max(0.1, 1 - (currentQuestionAttempts * 0.2)));
+      feedback = `${correctCount} من ${pairs.length} صحيح. حاول مرة أخرى. (النقاط: ${pp})`;
+      playTone("error"); render();
+    }
+    return;
+  }
+  if (action === "submit-fill") {
+    const door = content.doors.find((entry) => entry.id === selectedDoorId);
+    if (!door) return;
+    const questions = getDoorQuestions(door);
+    const question = questions[currentQuestionIndex];
+    if (!question || question.type !== "fill") return;
+    const answer = (fillAnswer || "").trim();
+    if (!answer) { feedback = "يرجى كتابة الإجابة."; render(); return; }
+    const acceptable = (question.acceptableAnswers || []).map(a => a.trim().toLowerCase());
+    if (acceptable.includes(answer.toLowerCase())) {
+      const points = awardQuestionPoints(question, currentQuestionAttempts);
+      feedback = `إجابة صحيحة! حصلت على ${points} نقطة.`;
+      playTone("success"); pulse(20); nextQuestion();
+    } else {
+      currentQuestionAttempts += 1;
+      fillAnswer = "";
+      const pp = Math.ceil((Number(question.points) || 10) * Math.max(0.1, 1 - (currentQuestionAttempts * 0.2)));
+      feedback = `إجابة خاطئة. حاول مرة أخرى. (النقاط: ${pp})`;
+      playTone("error"); render();
+    }
+    return;
+  }
+  if (action === "challenge-pick") {
+    const door = content.doors.find((entry) => entry.id === selectedDoorId);
+    if (!door) return;
+    const questions = getDoorQuestions(door);
+    const question = questions[currentQuestionIndex];
+    if (!question || question.type !== "challenge") return;
+    const item = button.dataset.value;
+    if (miniPick.includes(item)) return;
+    miniPick.push(item);
+    const correct = question.correct || [];
+    const stillValid = miniPick.every((choice, idx) => choice === correct[idx]);
+    if (!stillValid) {
+      currentQuestionAttempts += 1;
+      miniPick = [];
+      const pp = Math.ceil((Number(question.points) || 10) * Math.max(0.1, 1 - (currentQuestionAttempts * 0.2)));
+      feedback = `ترتيب خاطئ. حاول مرة أخرى. (النقاط: ${pp})`;
+      playTone("error"); render(); return;
+    }
+    if (miniPick.length === correct.length) {
+      const points = awardQuestionPoints(question, currentQuestionAttempts);
+      feedback = `ترتيب صحيح! حصلت على ${points} نقطة.`;
+      playTone("success"); pulse(20); nextQuestion(); return;
+    }
+    feedback = "صحيح حتى الآن، أكمل الترتيب.";
+    playTone("tap"); render();
+    return;
+  }
+
+  if (action === "admin-mode") {
+    adminMode = id;
+    render();
+  }
+  if (action === "edit-door") {
+    editingDoorId = id;
+    render();
+  }
+  if (action === "new-door") {
+    const newDoor = {
+      ...clone(DEFAULT_CONTENT.doors[0]),
+      id: uid("door"),
+      title: "باب جديد",
+      summary: "اكتب شرحًا مختصرًا ومناسبًا للطلاب.",
+      cardId: content.cards[0]?.id || "",
+      questions: [],
+    };
+    content.doors.push(newDoor);
+    editingDoorId = newDoor.id;
+    selectedDoorId = newDoor.id;
+    persist();
+    render();
+  }
+  if (action === "delete-door") {
+    if (content.doors.length <= 1) return;
+    content.doors = content.doors.filter((door) => door.id !== id);
+    content.obstacles = content.obstacles.filter((obstacle) => obstacle.gateAfter !== id);
+    progress.completedDoors = progress.completedDoors.filter((doorId) => doorId !== id);
+    selectedDoorId = content.doors[0]?.id || "";
+    editingDoorId = selectedDoorId;
+    persist();
+    render();
+  }
+  if (action === "edit-card") {
+    editingCardId = id;
+    render();
+  }
+  if (action === "close-overlay") {
+    panelOpen = false;
+    render();
+  }
+  if (action === "new-card") {
+    const newCard = { id: uid("card"), title: "بطاقة جديدة", icon: "نجمة", power: "اكتب أثر البطاقة داخل الرحلة." };
+    content.cards.push(newCard);
+    editingCardId = newCard.id;
+    persist();
+    render();
+  }
+  if (action === "delete-card") {
+    content.cards = content.cards.filter((card) => card.id !== id);
+    progress.cards = progress.cards.filter((cardId) => cardId !== id);
+    editingCardId = content.cards[0]?.id || "";
+    persist();
+    render();
+  }
+  if (action === "edit-obstacle") {
+    editingObstacleId = id;
+    render();
+  }
+  if (action === "new-obstacle") {
+    const newObstacle = {
+      id: uid("obstacle"),
+      title: "عقبة جديدة",
+      gateAfter: content.doors[0]?.id || "",
+      requiredCardId: content.cards[0]?.id || "",
+      prompt: "ما التصرف المناسب لتجاوز هذه العقبة؟",
+      options: ["اختيار صحيح", "اختيار بعيد", "اختيار مشتت"],
+      answerIndex: 0,
+    };
+    content.obstacles.push(newObstacle);
+    editingObstacleId = newObstacle.id;
+    persist();
+    render();
+  }
+  if (action === "delete-obstacle") {
+    content.obstacles = content.obstacles.filter((obstacle) => obstacle.id !== id);
+    progress.resolvedObstacles = progress.resolvedObstacles.filter((obstacleId) => obstacleId !== id);
+    editingObstacleId = content.obstacles[0]?.id || "";
+    persist();
+    render();
+  }
+  if (action === "reset-progress") {
+    progress = normalizeProgress();
+    resetChallenge();
+    persist();
+    render();
+  }
+  if (action === "reset-content") {
+    content = clone(DEFAULT_CONTENT);
+    progress = normalizeProgress();
+
+    selectedDoorId = content.doors[0]?.id || "";
+    editingDoorId = content.doors[0]?.id || "";
+    editingCardId = content.cards[0]?.id || "";
+    editingObstacleId = content.obstacles[0]?.id || "";
+
+    persist();
+    render();
+  }
+}
+   
+
+  async function handleSubmit(event) {
     event.preventDefault();
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
@@ -895,18 +1168,33 @@ if (action === "reset-content") {
       door.summary = String(data.get("summary") || "").trim();
       door.illustration = String(data.get("illustration") || "").trim();
       door.keyPoints = splitList(data.get("keyPoints"));
-      door.quiz.prompt = String(data.get("quizPrompt") || "").trim();
-      door.quiz.options = splitList(data.get("quizOptions"));
-      door.quiz.answerIndex = Math.max(0, Math.min(Number(data.get("quizAnswer")) || 0, door.quiz.options.length - 1));
-      door.scenario.prompt = String(data.get("scenarioPrompt") || "").trim();
-      door.scenario.options = splitList(data.get("scenarioOptions"));
-      door.scenario.answerIndex = Math.max(0, Math.min(Number(data.get("scenarioAnswer")) || 0, door.scenario.options.length - 1));
-      door.mini.prompt = String(data.get("miniPrompt") || "").trim();
-      door.mini.items = splitList(data.get("miniItems"));
-      door.mini.correct = splitList(data.get("miniCorrect"));
       door.cardId = String(data.get("cardId") || "");
       door.xp = Number(data.get("xp")) || 80;
       selectedDoorId = door.id;
+
+      if (authToken && currentUser?.role?.trim() === "admin") {
+        try {
+          await saveDoorOnServer(authToken, {
+            doorId: door.id,
+            title: door.title,
+            summary: door.summary,
+            illustration: door.illustration,
+            keyPoints: door.keyPoints,
+            cardId: door.cardId,
+            xp: door.xp,
+            questions: door.questions || [],
+          });
+          renderSaveState("تم حفظ الباب في السيرفر");
+        } catch (error) {
+          console.error("تعذر حفظ الباب:", error);
+          renderSaveState("تعذر حفظ الباب في السيرفر");
+        }
+      } else {
+        await persist();
+      }
+
+      render();
+      return;
     }
     if (type === "card") {
       const card = content.cards.find((item) => item.id === data.get("id"));
@@ -924,13 +1212,14 @@ if (action === "reset-content") {
       obstacle.prompt = String(data.get("prompt") || "").trim();
       obstacle.options = splitList(data.get("options"));
       obstacle.answerIndex = Math.max(0, Math.min(Number(data.get("answerIndex")) || 0, obstacle.options.length - 1));
+      obstacle.referenceType = String(data.get("referenceType") || "article");
+      obstacle.referenceTitle = String(data.get("referenceTitle") || "").trim();
+      obstacle.referenceLink = String(data.get("referenceLink") || "").trim();
     }
     feedback = "تم تحديث المحتوى التجريبي.";
     persist();
     render();
   }
-
-  
 
 function render() {
   if (!shell) return;
@@ -1051,8 +1340,7 @@ function renderRewardAnimation() {
       <div class="reward-animation">
         <div class="reward-key-pop">
           <img src="${assetUrls.KEY}" alt="مفتاح" draggable="false" />
-          <strong>${escapeHtml(key.title || "مفتاح جديد")}</strong>
-          <span>${escapeHtml(key.subtitle || "مفتاح")}</span>
+          <strong>${escapeHtml(key.title || "مفتاح")}</strong>
         </div>
       </div>
     `;
@@ -1254,25 +1542,91 @@ function renderPlayerMarker() {
         `;
       }
 
-      if (question.type === "order") {
+      if (question.type === "mcq") {
         return `
-          <p class="eyebrow">${escapeHtml(question.prompt)}</p>
+          <p class="eyebrow">اختر الإجابة الصحيحة</p>
+          <h3>${escapeHtml(question.prompt)}</h3>
+          <div class="option-list">
+            ${(question.options || []).map((option, index) => `<button class="option-button" data-action="answer-quiz" data-index="${index}">${escapeHtml(option)}</button>`).join("")}
+          </div>
+          <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+        `;
+      }
+
+      if (question.type === "truefalse") {
+        return `
+          <p class="eyebrow">صح أم خطأ؟</p>
+          <h3>${escapeHtml(question.prompt)}</h3>
+          <div class="option-list tf-list">
+            <button class="option-button tf-true" data-action="answer-tf" data-value="true">✅ صحيح</button>
+            <button class="option-button tf-false" data-action="answer-tf" data-value="false">❌ خطأ</button>
+          </div>
+          <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+        `;
+      }
+
+      if (question.type === "match") {
+        const pairs = question.pairs || [];
+        const seed = currentQuestionIndex * 1000 + 42;
+        const displayPairs = seededShuffle(pairs, seed);
+        const rightOptions = seededShuffle(pairs.map(p => p.right), seed + 777);
+        return `
+          <p class="eyebrow">${escapeHtml(question.prompt || "صل كل عنصر بما يناسبه")}</p>
+          <div class="match-board">
+            ${displayPairs.map((pair, i) => `
+              <div class="match-row">
+                <span class="match-left">${escapeHtml(pair.left)}</span>
+                <select name="match-${i}" class="match-select">
+                  <option value="">← اختر</option>
+                  ${rightOptions.map(r => `<option value="${escapeHtml(r)}" ${matchSelections[String(i)] === r ? "selected" : ""}>${escapeHtml(r)}</option>`).join("")}
+                </select>
+              </div>
+            `).join("")}
+          </div>
+          <div class="panel-actions">
+            <button class="primary-button full" data-action="submit-match">تحقق من التوصيل</button>
+          </div>
+          <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+        `;
+      }
+
+      if (question.type === "fill") {
+        return `
+          <p class="eyebrow">أكمل الفراغ</p>
+          <h3>${escapeHtml((question.prompt || "").replace(/_{3,}/g, "______"))}</h3>
+          <div class="fill-board">
+            <input type="text" id="fill-answer-input" class="fill-input" value="${escapeHtml(fillAnswer)}" placeholder="اكتب إجابتك هنا" autocomplete="off" />
+            <button class="primary-button full" data-action="submit-fill">تحقق</button>
+          </div>
+          <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+        `;
+      }
+
+      if (question.type === "challenge") {
+        const seed = currentQuestionIndex * 1000 + 99;
+        const shuffledItems = seededShuffle(question.items || [], seed);
+        return `
+          <p class="eyebrow">${escapeHtml(question.prompt || "رتّب العناصر بالترتيب الصحيح")}</p>
           <div class="mini-board">
-            ${question.items.map((item) => `<button class="chip-button ${miniPick.includes(item) ? "is-picked" : ""}" data-action="mini-pick" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
+            ${shuffledItems.map((item) => `<button class="chip-button ${miniPick.includes(item) ? "is-picked" : ""}" data-action="challenge-pick" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
           </div>
           <div class="answer-lane">${miniPick.length ? miniPick.map((item, index) => `<span>${index + 1}. ${escapeHtml(item)}</span>`).join("") : "اختر العناصر بالترتيب الصحيح"}</div>
           <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
         `;
       }
 
-      return `
-        <p class="eyebrow">اختر الإجابة الصحيحة</p>
-        <h3>${escapeHtml(question.prompt)}</h3>
-        <div class="option-list">
-          ${(question.options || []).map((option, index) => `<button class="option-button" data-action="answer-quiz" data-index="${index}">${escapeHtml(option)}</button>`).join("")}
-        </div>
-        <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
-      `;
+      if (question.type === "order") {
+        return `
+          <p class="eyebrow">${escapeHtml(question.prompt)}</p>
+          <div class="mini-board">
+            ${(question.items || []).map((item) => `<button class="chip-button ${miniPick.includes(item) ? "is-picked" : ""}" data-action="mini-pick" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join("")}
+          </div>
+          <div class="answer-lane">${miniPick.length ? miniPick.map((item, index) => `<span>${index + 1}. ${escapeHtml(item)}</span>`).join("") : "اختر العناصر بالترتيب الصحيح"}</div>
+          <p class="small-note">السؤال ${currentQuestionIndex + 1} من ${questions.length}</p>
+        `;
+      }
+
+      return `<p>نوع سؤال غير معروف: ${escapeHtml(question.type)}</p>`;
     }
 
     return `
@@ -1283,6 +1637,56 @@ function renderPlayerMarker() {
       </div>
     `;
   }
+
+function getEmptyQuestion(type) {
+  const base = { type, prompt: "", points: 10, hint: "" };
+  switch (type) {
+    case "mcq": return { ...base, options: ["", "", "", ""], answerIndex: 0 };
+    case "truefalse": return { ...base, correctAnswer: true };
+    case "match": return { ...base, pairs: [{ left: "", right: "" }, { left: "", right: "" }, { left: "", right: "" }] };
+    case "fill": return { ...base, acceptableAnswers: [""] };
+    case "challenge": return { ...base, challengeType: "order", items: [""], correct: [""] };
+    default: return { ...base, type: "mcq", options: ["", "", "", ""], answerIndex: 0 };
+  }
+}
+
+function readQuestionFromForm(q) {
+  q.type = shell.querySelector('[name="q-type"]')?.value || q.type || "mcq";
+  q.prompt = shell.querySelector('[name="q-prompt"]')?.value?.trim() || "";
+  q.points = Number(shell.querySelector('[name="q-points"]')?.value) || 10;
+  q.hint = shell.querySelector('[name="q-hint"]')?.value?.trim() || "";
+
+  if (q.type === "mcq") {
+    q.options = [];
+    shell.querySelectorAll('[name^="q-option-"]').forEach(el => q.options.push(el.value.trim()));
+    q.options = q.options.filter(Boolean);
+    q.answerIndex = Number(shell.querySelector('[name="q-answer-index"]:checked')?.value) || 0;
+  }
+  if (q.type === "truefalse") {
+    q.correctAnswer = shell.querySelector('[name="q-correct-tf"]:checked')?.value !== "false";
+  }
+  if (q.type === "match") {
+    q.pairs = [];
+    shell.querySelectorAll('[name^="q-pair-left-"]').forEach((el, i) => {
+      const right = shell.querySelector(`[name="q-pair-right-${i}"]`)?.value?.trim() || "";
+      if (el.value.trim() || right) q.pairs.push({ left: el.value.trim(), right });
+    });
+  }
+  if (q.type === "fill") {
+    q.acceptableAnswers = [];
+    shell.querySelectorAll('[name^="q-fill-answer-"]').forEach(el => {
+      if (el.value.trim()) q.acceptableAnswers.push(el.value.trim());
+    });
+  }
+  if (q.type === "challenge") {
+    q.challengeType = shell.querySelector('[name="q-challenge-type"]')?.value || "order";
+    q.items = [];
+    q.correct = [];
+    shell.querySelectorAll('[name^="q-ch-item-"]').forEach(el => { if (el.value.trim()) q.items.push(el.value.trim()); });
+    shell.querySelectorAll('[name^="q-ch-correct-"]').forEach(el => { if (el.value.trim()) q.correct.push(el.value.trim()); });
+  }
+  return q;
+}
 
   function renderOptions(kind, challenge, label) {
     const action = kind === "quiz" ? "answer-quiz" : "answer-scenario";
@@ -1322,51 +1726,149 @@ function renderPlayerMarker() {
   }
 
 function renderStudent(stats) {
+  const completed = completedSet();
+  const ownedCards = new Set(progress.cards);
+  const ownedKeys = new Set(progress.keys);
+  const resolvedObstacles = obstacleSet();
+
+  const currentDoor = getCurrentDoor();
+  const nextLevel = stats.next;
+  const xpToNext = nextLevel ? nextLevel.min - progress.xp : 0;
+
+  const doorsJourney = content.doors.map((door, index) => {
+    const isCompleted = completed.has(door.id);
+    const isUnlocked = isDoorUnlocked(index);
+    const isCurrent = door.id === currentDoor?.id;
+    const card = content.cards.find(c => c.id === door.cardId);
+    const hasCard = card && ownedCards.has(card.id);
+    const hasKey = ownedKeys.has(door.id);
+
+    let statusIcon = "🔒";
+    let statusText = "مغلق";
+    let statusClass = "door-locked";
+
+    if (isCompleted) {
+      statusIcon = "✅";
+      statusText = "مكتمل";
+      statusClass = "door-completed";
+    } else if (isCurrent) {
+      statusIcon = "📍";
+      statusText = "حالي";
+      statusClass = "door-current";
+    } else if (isUnlocked) {
+      statusIcon = "🔓";
+      statusText = "متاح";
+      statusClass = "door-unlocked";
+    }
+
+    return `
+      <div class="journey-door ${statusClass}">
+        <div class="journey-door-header">
+          <span class="journey-num">${index + 1}</span>
+          <strong>${escapeHtml(door.title)}</strong>
+          <span class="journey-status-badge">${statusIcon} ${statusText}</span>
+        </div>
+        <div class="journey-door-rewards">
+          <span class="jr ${hasKey ? 'jr-has' : ''}">🔑 مفتاح ${hasKey ? '✓' : ''}</span>
+          ${card ? `<span class="jr ${hasCard ? 'jr-has' : ''}">${escapeHtml(card.icon)} ${escapeHtml(card.title)} ${hasCard ? '✓' : ''}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const keysList = content.doors
+    .filter(door => ownedKeys.has(door.id))
+    .map(door => `
+      <div class="key-collected">
+        <img src="${assetUrls.KEY}" alt="" draggable="false" />
+        <span>${escapeHtml(makeDoorKeyName(door.title))}</span>
+      </div>
+    `).join("") || `<p class="empty-note">لم تحصل على أي مفتاح بعد.</p>`;
+
+  const obstaclesList = content.obstacles.map(obs => {
+    const isResolved = resolvedObstacles.has(obs.id);
+    return `
+      <div class="obs-item ${isResolved ? 'obs-done' : ''}">
+        <span class="obs-icon">${isResolved ? "✅" : "⏳"}</span>
+        <div>
+          <strong>${escapeHtml(obs.title)}</strong>
+          <span>${isResolved ? "تم التجاوز" : "لم يُتجاوز بعد"}</span>
+        </div>
+      </div>
+    `;
+  }).join("") || `<p class="empty-note">لا توجد عقبات في هذه الرحلة.</p>`;
+
   return `
     <div class="dashboard student-board">
 
-      <section class="stat-hero">
-        <p class="eyebrow">لوحة الطالب</p>
-
-        <p>
-          أنجزت ${stats.progressPercent}% من رحلة الخريطة
-          وجمعت ${stats.cards} بطاقة.
-        </p>
-
-        <div class="big-progress">
-          <i style="width:${stats.progressPercent}%"></i>
+      <section class="student-profile">
+        <div class="profile-avatar">
+          <img src="${assetUrls.STUDENT_EXPLORER}" alt="" draggable="false" />
         </div>
+        <div class="profile-info">
+          <h2>${escapeHtml(currentUser?.name || "الطالب")}</h2>
+          <span class="profile-level-badge">${escapeHtml(stats.level.title)}</span>
+          <div class="xp-detail">
+            <span>${stats.xp} XP</span>
+            ${nextLevel ? `<span>المستقبل: ${escapeHtml(nextLevel.title)} (تحتاج ${xpToNext} XP)</span>` : `<span>🏆 أعلى مستوى!</span>`}
+          </div>
+          <div class="big-progress"><i style="width:${stats.levelPercent}%"></i></div>
+        </div>
+      </section>
+
+      <section class="stat-hero">
+        <p class="eyebrow">التقدم في الرحلة</p>
+        <p>أكملت ${stats.completed} من ${stats.totalDoors} أبواب (${stats.progressPercent}%)</p>
+        <div class="big-progress"><i style="width:${stats.progressPercent}%"></i></div>
       </section>
 
       <section class="stat-grid">
-        ${statCard("الأبواب المفتوحة", stats.unlocked)}
-        ${statCard("الأبواب المغلقة", stats.locked)}
+        ${statCard("المكتملة", stats.completed)}
+        ${statCard("المتاحة", stats.unlocked)}
+        ${statCard("المغلقة", stats.locked)}
         ${statCard("البطاقات", stats.cards)}
         ${statCard("المفاتيح", stats.keys)}
+        ${statCard("العقبات", progress.resolvedObstacles.length)}
         ${statCard("النقاط", stats.xp)}
+        ${statCard("المستوى", stats.level.title)}
+      </section>
+
+      <section class="journey-section">
+        <h3>🗺️ رحلة الأبواب</h3>
+        <div class="journey-list">${doorsJourney}</div>
+      </section>
+
+      <section class="keys-section">
+        <h3>🔑 المفاتيح</h3>
+        <div class="keys-grid">${keysList}</div>
       </section>
 
       <section class="cards-section">
-        <h3>بطاقاتك</h3>
+        <h3>🃏 البطاقات</h3>
+        <p class="section-note">اجمع البطاقات بحصولك على 80% أو أكثر في كل باب</p>
         <div class="card-grid">
-          ${content.cards.map((card) =>
-            renderCard(card, progress.cards.includes(card.id))
-          ).join("")}
+          ${content.cards.map((card) => renderCard(card, ownedCards.has(card.id))).join("")}
         </div>
       </section>
 
+      <section class="obstacles-section">
+        <h3>⚡ العقبات</h3>
+        <div class="obstacles-list">${obstaclesList}</div>
+      </section>
+
       <section class="achievements">
-        <h3>آخر الإنجازات</h3>
-        ${
-          progress.achievements.length
-            ? progress.achievements
-                .map(
-                  (item) =>
-                    `<p><span>${escapeHtml(item.at)}</span>${escapeHtml(item.text)}</p>`
-                )
-                .join("")
-            : `<p>ابدأ أول باب لتظهر إنجازاتك هنا.</p>`
-        }
+        <h3>🏆 الإنجازات</h3>
+        ${progress.achievements.length
+          ? progress.achievements.map(item => `<p><span>${escapeHtml(item.at)}</span>${escapeHtml(item.text)}</p>`).join("")
+          : `<p>ابدأ أول باب لتظهر إنجازاتك هنا.</p>`}
+      </section>
+
+      <section class="next-step-section">
+        <h3>📌 الخطوة التالية</h3>
+        ${currentDoor
+          ? `<p>الباب التالي: <strong>${escapeHtml(currentDoor.title)}</strong></p>
+             <button class="primary-button full" data-action="tab" data-id="map">الذهاب إلى الخريطة</button>`
+          : `<p>🎉 مبروك! أكملت جميع الأبواب!</p>`}
       </section>
 
     </div>
@@ -1424,40 +1926,184 @@ function renderStudent(stats) {
 
   function renderDoorAdmin() {
     const door = content.doors.find((item) => item.id === editingDoorId) || content.doors[0];
+    if (!door) return `<div class="empty-panel">لا يوجد باب.</div>`;
+    if (!Array.isArray(door.questions)) door.questions = [];
+
+    const showEditor = editingQuestionIdx >= -2 && tempQuestion;
+    const typeIcons = { mcq: "📋", truefalse: "✅❌", match: "🔗", fill: "✏️", challenge: "🎯" };
+    const typeNames = { mcq: "اختيار متعدد", truefalse: "صح/خطأ", match: "وصل", fill: "أكمل", challenge: "تحدي" };
+
     return `
       <div class="admin-layout">
         <aside class="admin-list">
           <button class="primary-button full" data-action="new-door">إضافة باب جديد</button>
           ${content.doors.map((item, index) => `
             <div class="admin-list-row ${item.id === door?.id ? "is-active" : ""}">
-              <button data-action="edit-door" data-id="${escapeHtml(item.id)}">${index + 1}. ${escapeHtml(item.title)}</button>
+              <button data-action="edit-door" data-id="${escapeHtml(item.id)}">${index + 1}. ${escapeHtml(item.title)} <small>(${(item.questions || []).length} سؤال)</small></button>
               <button class="danger" data-action="delete-door" data-id="${escapeHtml(item.id)}">حذف</button>
             </div>
           `).join("")}
         </aside>
-        ${door ? `
-          <form class="admin-form" data-type="door">
+        <div class="admin-form admin-door-form">
+          <form data-type="door">
             <input type="hidden" name="id" value="${escapeHtml(door.id)}" />
             ${field("عنوان الباب", "title", door.title)}
             ${textarea("شرح مختصر", "summary", door.summary)}
-            ${field("وصف رسم/فيديو/خريطة ذهنية", "illustration", door.illustration)}
-            ${field("نقاط مفتاحية مفصولة بفواصل", "keyPoints", door.keyPoints.join("، "))}
-            ${field("سؤال فهم", "quizPrompt", door.quiz.prompt)}
-            ${field("اختيارات الفهم", "quizOptions", door.quiz.options.join("، "))}
-            ${field("رقم الإجابة الصحيحة للفهم: 0 أو 1 أو 2", "quizAnswer", door.quiz.answerIndex, "number")}
-            ${field("الموقف الواقعي", "scenarioPrompt", door.scenario.prompt)}
-            ${field("اختيارات الموقف", "scenarioOptions", door.scenario.options.join("، "))}
-            ${field("رقم الإجابة الصحيحة للموقف", "scenarioAnswer", door.scenario.answerIndex, "number")}
-            ${field("نص اللعبة الصغيرة", "miniPrompt", door.mini.prompt)}
-            ${field("عناصر اللعبة الصغيرة", "miniItems", door.mini.items.join("، "))}
-            ${field("الترتيب الصحيح", "miniCorrect", door.mini.correct.join("، "))}
-            <label>البطاقة الممنوحة<select name="cardId">${content.cards.map((card) => `<option value="${escapeHtml(card.id)}" ${card.id === door.cardId ? "selected" : ""}>${escapeHtml(card.title)}</option>`).join("")}</select></label>
-            ${field("نقاط XP", "xp", door.xp, "number")}
-            <button class="primary-button full" type="submit">حفظ الباب</button>
+            ${field("وصف رسم/فيديو", "illustration", door.illustration)}
+            ${field("نقاط مفتاحية (فواصل)", "keyPoints", (door.keyPoints || []).join("، "))}
+            <label>البطاقة الممنوحة<select name="cardId">
+              <option value="">بدون بطاقة</option>
+              ${content.cards.map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === door.cardId ? "selected" : ""}>${escapeHtml(c.title)}</option>`).join("")}
+            </select></label>
+            ${field("نقاط الخبرة", "xp", door.xp, "number")}
+            <button type="submit" class="primary-button full">حفظ بيانات الباب</button>
           </form>
-        ` : `<p>لا توجد أبواب.</p>`}
+
+          <div class="questions-builder">
+            <div class="qb-header">
+              <h3>الأسئلة (${door.questions.length})</h3>
+              <div class="qb-add-buttons">
+                ${Object.keys(typeNames).map(t => `<button class="ghost-button qb-add-btn" data-action="add-question" data-type="${t}">${typeIcons[t]} ${typeNames[t]}</button>`).join("")}
+              </div>
+            </div>
+            <div class="qb-list">
+              ${door.questions.length === 0 ? `<p class="empty-note">لم تُضف أسئلة بعد.</p>` : ""}
+              ${door.questions.map((q, i) => `
+                <div class="qb-item ${editingQuestionIdx === i ? 'is-editing' : ''}">
+                  <div class="qb-item-info">
+                    <span class="qb-type-icon">${typeIcons[q.type] || "❓"}</span>
+                    <span class="qb-type-name">${typeNames[q.type] || q.type}</span>
+                    <span class="qb-prompt">${escapeHtml((q.prompt || "").substring(0, 50))}${(q.prompt || "").length > 50 ? "..." : ""}</span>
+                    <span class="qb-points">${q.points || 10}ن</span>
+                  </div>
+                  <div class="qb-item-actions">
+                    <button class="ghost-button" data-action="move-question" data-index="${i}" data-dir="up" ${i === 0 ? 'disabled' : ''}>↑</button>
+                    <button class="ghost-button" data-action="move-question" data-index="${i}" data-dir="down" ${i === door.questions.length - 1 ? 'disabled' : ''}>↓</button>
+                    <button class="ghost-button" data-action="edit-question" data-index="${i}">تعديل</button>
+                    <button class="danger" data-action="delete-question" data-index="${i}">حذف</button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+            ${showEditor ? renderQuestionEditor(tempQuestion) : ""}
+          </div>
+        </div>
       </div>
     `;
+  }
+
+    function renderQuestionEditor(q) {
+    const isNew = editingQuestionIdx === -2;
+    const typeNames = { mcq: "اختيار متعدد", truefalse: "صح/خطأ", match: "وصل", fill: "أكمل الإجابة", challenge: "تحدي" };
+    let editorContent = "";
+
+    if (q.type === "mcq") {
+      const opts = q.options || ["", "", "", ""];
+      editorContent = `
+        ${field("نص السؤال", "q-prompt", q.prompt)}
+        <div class="q-options-editor">
+          <label>الخيارات (اختر الإجابة الصحيحة)</label>
+          ${opts.map((opt, i) => `
+            <div class="q-option-row">
+              <input type="radio" name="q-answer-index" value="${i}" ${Number(q.answerIndex) === i ? "checked" : ""} />
+              <input type="text" name="q-option-${i}" value="${escapeHtml(opt)}" placeholder="الخيار ${i + 1}" />
+              ${opts.length > 2 ? `<button type="button" class="danger q-remove-btn" data-action="remove-mcq-option" data-index="${i}">✕</button>` : ""}
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-mcq-option">+ إضافة خيار</button>
+        </div>`;
+    }
+
+    if (q.type === "truefalse") {
+      editorContent = `
+        ${field("نص العبارة", "q-prompt", q.prompt)}
+        <label>الإجابة الصحيحة</label>
+        <div class="tf-options">
+          <label class="tf-option"><input type="radio" name="q-correct-tf" value="true" ${q.correctAnswer !== false ? "checked" : ""} /> صح</label>
+          <label class="tf-option"><input type="radio" name="q-correct-tf" value="false" ${q.correctAnswer === false ? "checked" : ""} /> خطأ</label>
+        </div>`;
+    }
+
+    if (q.type === "match") {
+      const pairs = q.pairs || [{ left: "", right: "" }];
+      editorContent = `
+        ${field("نص السؤال (مثال: صل كل مصطلح بتعريفه)", "q-prompt", q.prompt)}
+        <div class="q-pairs-editor">
+          <label>الأزواج</label>
+          ${pairs.map((p, i) => `
+            <div class="q-pair-row">
+              <input type="text" name="q-pair-left-${i}" value="${escapeHtml(p.left)}" placeholder="الطرف الأيسر" />
+              <span>↔</span>
+              <input type="text" name="q-pair-right-${i}" value="${escapeHtml(p.right)}" placeholder="الطرف الأيمن" />
+              ${pairs.length > 2 ? `<button type="button" class="danger q-remove-btn" data-action="remove-match-pair" data-index="${i}">✕</button>` : ""}
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-match-pair">+ إضافة زوج</button>
+        </div>`;
+    }
+
+    if (q.type === "fill") {
+      const answers = q.acceptableAnswers || [""];
+      editorContent = `
+        ${field("نص السؤال (استخدم ___ مكان الفراغ)", "q-prompt", q.prompt)}
+        <div class="q-fill-editor">
+          <label>الإجابات المقبولة (يمكن إضافة صيغ بديلة)</label>
+          ${answers.map((a, i) => `
+            <div class="q-fill-row">
+              <input type="text" name="q-fill-answer-${i}" value="${escapeHtml(a)}" placeholder="إجابة مقبولة" />
+              ${answers.length > 1 ? `<button type="button" class="danger q-remove-btn" data-action="remove-fill-answer" data-index="${i}">✕</button>` : ""}
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-fill-answer">+ إجابة بديلة</button>
+        </div>`;
+    }
+
+    if (q.type === "challenge") {
+      const items = q.items || [];
+      const correct = q.correct || [];
+      editorContent = `
+        ${field("نص التحدي", "q-prompt", q.prompt)}
+        <label>نوع التحدي<select name="q-challenge-type">
+          <option value="order" ${q.challengeType === "order" ? "selected" : ""}>ترتيب</option>
+          <option value="classify" ${q.challengeType === "classify" ? "selected" : ""}>تصنيف</option>
+          <option value="sort" ${q.challengeType === "sort" ? "selected" : ""}>فرز</option>
+        </select></label>
+        <div class="q-challenge-editor">
+          <label>العناصر</label>
+          ${items.map((item, i) => `
+            <div class="q-ch-row">
+              <input type="text" name="q-ch-item-${i}" value="${escapeHtml(item)}" placeholder="عنصر ${i + 1}" />
+              <button type="button" class="danger q-remove-btn" data-action="remove-challenge-item" data-index="${i}">✕</button>
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-challenge-item">+ عنصر</button>
+          <label>الترتيب/التصنيف الصحيح</label>
+          ${correct.map((item, i) => `
+            <div class="q-ch-row">
+              <input type="text" name="q-ch-correct-${i}" value="${escapeHtml(item)}" placeholder="${i + 1}" />
+              <button type="button" class="danger q-remove-btn" data-action="remove-challenge-correct" data-index="${i}">✕</button>
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-challenge-correct">+ عنصر</button>
+        </div>`;
+    }
+
+    return `
+      <div class="question-editor">
+        <div class="qe-header">
+          <h3>${isNew ? "➕ سؤال جديد" : "✏️ تعديل السؤال"}</h3>
+          <select name="q-type" class="qe-type-select">
+            ${Object.entries(typeNames).map(([k, v]) => `<option value="${k}" ${q.type === k ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </div>
+        ${editorContent}
+        ${field("النقاط", "q-points", q.points, "number")}
+        ${field("تلميح (اختياري)", "q-hint", q.hint || "")}
+        <div class="qe-actions">
+          <button type="button" class="primary-button" data-action="save-question">${isNew ? "إضافة السؤال" : "حفظ التعديل"}</button>
+          <button type="button" class="ghost-button" data-action="cancel-question">إلغاء</button>
+        </div>
+      </div>`;
   }
 
   function renderCardAdmin() {
@@ -1488,10 +2134,12 @@ function renderStudent(stats) {
 
   function renderObstacleAdmin() {
     const obstacle = content.obstacles.find((item) => item.id === editingObstacleId) || content.obstacles[0];
+    if (!obstacle) return `<div class="empty-panel">لا توجد عقبات.</div>`;
+
     return `
       <div class="admin-layout">
         <aside class="admin-list">
-          <button class="primary-button full" data-action="new-obstacle">إضافة عقبة</button>
+          <button class="primary-button full" data-action="new-obstacle">إضافة عقبة جديدة</button>
           ${content.obstacles.map((item) => `
             <div class="admin-list-row ${item.id === obstacle?.id ? "is-active" : ""}">
               <button data-action="edit-obstacle" data-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</button>
@@ -1499,18 +2147,31 @@ function renderStudent(stats) {
             </div>
           `).join("")}
         </aside>
-        ${obstacle ? `
-          <form class="admin-form" data-type="obstacle">
-            <input type="hidden" name="id" value="${escapeHtml(obstacle.id)}" />
-            ${field("اسم العقبة", "title", obstacle.title)}
-            <label>تظهر بعد باب<select name="gateAfter">${content.doors.map((door) => `<option value="${escapeHtml(door.id)}" ${door.id === obstacle.gateAfter ? "selected" : ""}>${escapeHtml(door.title)}</option>`).join("")}</select></label>
-            <label>البطاقة المناسبة<select name="requiredCardId">${content.cards.map((card) => `<option value="${escapeHtml(card.id)}" ${card.id === obstacle.requiredCardId ? "selected" : ""}>${escapeHtml(card.title)}</option>`).join("")}</select></label>
-            ${field("سؤال العقبة", "prompt", obstacle.prompt)}
-            ${field("اختيارات العقبة", "options", obstacle.options.join("، "))}
-            ${field("رقم الإجابة الصحيحة", "answerIndex", obstacle.answerIndex, "number")}
-            <button class="primary-button full" type="submit">حفظ العقبة</button>
-          </form>
-        ` : `<p>لا توجد عقبات.</p>`}
+        <form class="admin-form" data-type="obstacle">
+          <input type="hidden" name="id" value="${escapeHtml(obstacle.id)}" />
+          ${field("عنوان العقبة", "title", obstacle.title)}
+          <label>تظهر بعد باب<select name="gateAfter">
+            ${content.doors.map((d) => `<option value="${escapeHtml(d.id)}" ${d.id === obstacle.gateAfter ? "selected" : ""}>${escapeHtml(d.title)}</option>`).join("")}
+          </select></label>
+          <label>البطاقة المطلوبة<select name="requiredCardId">
+            <option value="">بدون بطاقة (يرجع للمرجع)</option>
+            ${content.cards.map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === obstacle.requiredCardId ? "selected" : ""}>${escapeHtml(c.title)}</option>`).join("")}
+          </select></label>
+          ${field("نص سؤال العقبة", "prompt", obstacle.prompt)}
+          ${field("الاختيارات (فواصل)", "options", (obstacle.options || []).join("، "))}
+          ${field("رقم الإجابة الصحيحة", "answerIndex", obstacle.answerIndex, "number")}
+          <div class="ref-section">
+            <h4>📌 المرجع (يظهر إذا لم يملك الطالب البطاقة)</h4>
+            <label>نوع المرجع<select name="referenceType">
+              <option value="article" ${obstacle.referenceType === "article" ? "selected" : ""}>مقال</option>
+              <option value="video" ${obstacle.referenceType === "video" ? "selected" : ""}>فيديو</option>
+              <option value="book" ${obstacle.referenceType === "book" ? "selected" : ""}>كتاب</option>
+            </select></label>
+            ${field("عنوان المرجع", "referenceTitle", obstacle.referenceTitle || "")}
+            ${field("رابط المرجع", "referenceLink", obstacle.referenceLink || "")}
+          </div>
+          <button type="submit" class="primary-button full">حفظ التعديلات</button>
+        </form>
       </div>
     `;
   }
@@ -1565,6 +2226,8 @@ start() {
 
   root.addEventListener("click", handleClick);
   root.addEventListener("submit", handleSubmit);
+  root.addEventListener("change", handleChange);
+  root.addEventListener("input", handleChange);
 
   startButton.addEventListener("click", async () => {
     if (!imagesReady || !saveReady || started) return;

@@ -40,6 +40,7 @@ router.get("/content", async (req, res) => {
         mini: door.mini || {},
         cardId: door.card_id,
         xp: door.xp,
+        questions: door.questions || [],
       })),
       cards: cards.rows.map((card) => ({
         id: card.id,
@@ -223,6 +224,38 @@ router.post("/reset-progress", auth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "تعذر تصفير التقدم" });
+  }
+});
+
+router.post("/save-door", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+
+    const { doorId, title, summary, illustration, keyPoints, cardId, xp, questions } = req.body;
+
+    if (!doorId) {
+      return res.status(400).json({ message: "doorId مطلوب" });
+    }
+
+    await pool.query(
+      `UPDATE doors SET 
+        title = COALESCE($1, title),
+        summary = COALESCE($2, summary),
+        illustration = COALESCE($3, illustration),
+        key_points = COALESCE($4, key_points),
+        card_id = COALESCE($5, card_id),
+        xp = COALESCE($6, xp),
+        questions = COALESCE($7, '[]'::jsonb)
+      WHERE id = $8`,
+      [title, summary, illustration, keyPoints, cardId, xp, JSON.stringify(questions || []), doorId]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في حفظ الباب:", error);
+    res.status(500).json({ message: "تعذر حفظ الباب" });
   }
 });
 
