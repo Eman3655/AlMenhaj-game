@@ -239,23 +239,263 @@ router.post("/save-door", auth, async (req, res) => {
       return res.status(400).json({ message: "doorId مطلوب" });
     }
 
+    // معالجة قاتلة للـ keyPoints: نضمن دائماً أنه نص JSON صالح
+    let finalKeyPoints = keyPoints;
+    if (Array.isArray(finalKeyPoints)) {
+      finalKeyPoints = JSON.stringify(finalKeyPoints);
+    } else if (typeof finalKeyPoints === 'string') {
+      try {
+        const parsed = JSON.parse(finalKeyPoints);
+        finalKeyPoints = JSON.stringify(Array.isArray(parsed) ? parsed : [finalKeyPoints]);
+      } catch (e) {
+        finalKeyPoints = JSON.stringify([finalKeyPoints]);
+      }
+    } else {
+      finalKeyPoints = null;
+    }
+
+    // معالجة قاتلة للـ questions: نضمن دائماً أنه نص JSON صالح
+    let finalQuestions = questions;
+    if (Array.isArray(finalQuestions)) {
+      finalQuestions = JSON.stringify(finalQuestions);
+    } else if (typeof finalQuestions === 'string') {
+      try {
+        const parsed = JSON.parse(finalQuestions);
+        finalQuestions = JSON.stringify(Array.isArray(parsed) ? parsed : []);
+      } catch (e) {
+        finalQuestions = JSON.stringify([]);
+      }
+    } else {
+      finalQuestions = null;
+    }
+
+    // لاحظ إضافة ::jsonb في الاستعلام لإجبار قاعدة البيانات على قراءة النص كـ JSON
     await pool.query(
       `UPDATE doors SET 
         title = COALESCE($1, title),
         summary = COALESCE($2, summary),
         illustration = COALESCE($3, illustration),
-        key_points = COALESCE($4, key_points),
+        key_points = COALESCE($4::jsonb, key_points),
         card_id = COALESCE($5, card_id),
         xp = COALESCE($6, xp),
-        questions = COALESCE($7, '[]'::jsonb)
+        questions = COALESCE($7::jsonb, questions)
       WHERE id = $8`,
-      [title, summary, illustration, keyPoints, cardId, xp, JSON.stringify(questions || []), doorId]
+      [title, summary, illustration, finalKeyPoints, cardId, xp, finalQuestions, doorId]
     );
 
     res.json({ ok: true });
   } catch (error) {
     console.error("خطأ في حفظ الباب:", error);
     res.status(500).json({ message: "تعذر حفظ الباب" });
+  }
+});
+router.post("/save-card", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+
+    const { cardId, title, icon, power } = req.body;
+    if (!cardId) return res.status(400).json({ message: "cardId مطلوب" });
+
+    await pool.query(
+      `UPDATE cards SET 
+        title = COALESCE($1, title),
+        icon = COALESCE($2, icon),
+        power = COALESCE($3, power)
+      WHERE id = $4`,
+      [title, icon, power, cardId]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في حفظ البطاقة:", error);
+    res.status(500).json({ message: "تعذر حفظ البطاقة" });
+  }
+});
+
+router.post("/save-obstacle", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+
+    const { obstacleId, title, gateAfter, requiredCardId, prompt, options, answerIndex, referenceType, referenceTitle, referenceLink } = req.body;
+    if (!obstacleId) return res.status(400).json({ message: "obstacleId مطلوب" });
+
+    // معالجة قاتلة للـ options
+    let finalOptions = options;
+    if (Array.isArray(finalOptions)) {
+      finalOptions = JSON.stringify(finalOptions);
+    } else if (typeof finalOptions === 'string') {
+      try {
+        const parsed = JSON.parse(finalOptions);
+        finalOptions = JSON.stringify(Array.isArray(parsed) ? parsed : [finalOptions]);
+      } catch (e) {
+        finalOptions = JSON.stringify([finalOptions]);
+      }
+    } else {
+      finalOptions = null;
+    }
+
+    await pool.query(
+      `UPDATE obstacles SET 
+        title = COALESCE($1, title),
+        gate_after = COALESCE($2, gate_after),
+        required_card_id = COALESCE($3, required_card_id),
+        prompt = COALESCE($4, prompt),
+        options = COALESCE($5::jsonb, options),
+        answer_index = COALESCE($6, answer_index),
+        reference_type = COALESCE($7, reference_type),
+        reference_title = COALESCE($8, reference_title),
+        reference_link = COALESCE($9, reference_link)
+      WHERE id = $10`,
+      [title, gateAfter, requiredCardId, prompt, finalOptions, answerIndex, referenceType, referenceTitle, referenceLink, obstacleId]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في حفظ العقبة:", error);
+    res.status(500).json({ message: "تعذر حفظ العقبة" });
+  }
+});
+
+router.post("/add-door", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+
+    const { doorId, title, summary, illustration, keyPoints, cardId, xp, questions } = req.body;
+    if (!doorId || !title) return res.status(400).json({ message: "doorId و title مطلوبان" });
+
+    const maxNum = await pool.query(`SELECT COALESCE(MAX(number), 0) + 1 AS next_num FROM doors`);
+    const num = maxNum.rows[0].next_num;
+
+    await pool.query(
+      `INSERT INTO doors (id, number, title, summary, illustration, key_points, card_id, xp, questions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [doorId, num, title, summary, illustration, keyPoints, cardId, xp, questions || []]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في إضافة الباب:", error);
+    res.status(500).json({ message: "تعذر إضافة الباب" });
+  }
+});
+
+router.post("/add-card", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+
+    const { cardId, title, icon, power } = req.body;
+    if (!cardId || !title) return res.status(400).json({ message: "cardId و title مطلوبان" });
+
+    await pool.query(
+      `INSERT INTO cards (id, title, icon, power) VALUES ($1, $2, $3, $4)`,
+      [cardId, title, icon, power]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في إضافة البطاقة:", error);
+    res.status(500).json({ message: "تعذر إضافة البطاقة" });
+  }
+});
+
+router.post("/add-obstacle", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+
+    const { obstacleId, title, gateAfter, requiredCardId, prompt, options, answerIndex, referenceType, referenceTitle, referenceLink } = req.body;
+    if (!obstacleId || !title) return res.status(400).json({ message: "obstacleId و title مطلوبان" });
+
+    // معالجة قاتلة للـ options
+    let finalOptions = options;
+    if (Array.isArray(finalOptions)) {
+      finalOptions = JSON.stringify(finalOptions);
+    } else if (typeof finalOptions === 'string') {
+      try {
+        const parsed = JSON.parse(finalOptions);
+        finalOptions = JSON.stringify(Array.isArray(parsed) ? parsed : [finalOptions]);
+      } catch (e) {
+        finalOptions = JSON.stringify([finalOptions]);
+      }
+    } else {
+      finalOptions = '[]';
+    }
+
+    await pool.query(
+      `INSERT INTO obstacles (id, title, gate_after, required_card_id, prompt, options, answer_index, reference_type, reference_title, reference_link)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)`,
+      [obstacleId, title, gateAfter, requiredCardId, prompt, finalOptions, answerIndex, referenceType, referenceTitle, referenceLink]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في إضافة العقبة:", error);
+    res.status(500).json({ message: "تعذر إضافة العقبة" });
+  }
+});
+
+router.post("/delete-door", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+    const { doorId } = req.body;
+    if (!doorId) return res.status(400).json({ message: "doorId مطلوب" });
+
+    await pool.query(`DELETE FROM user_progress WHERE door_id = $1`, [doorId]);
+    await pool.query(`DELETE FROM user_keys WHERE door_id = $1`, [doorId]);
+    await pool.query(`DELETE FROM obstacles WHERE gate_after = $1`, [doorId]);
+    await pool.query(`DELETE FROM doors WHERE id = $1`, [doorId]);
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في حذف الباب:", error);
+    res.status(500).json({ message: "تعذر حذف الباب" });
+  }
+});
+
+router.post("/delete-card", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+    const { cardId } = req.body;
+    if (!cardId) return res.status(400).json({ message: "cardId مطلوب" });
+
+    await pool.query(`DELETE FROM user_cards WHERE card_id = $1`, [cardId]);
+    await pool.query(`DELETE FROM cards WHERE id = $1`, [cardId]);
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في حذف البطاقة:", error);
+    res.status(500).json({ message: "تعذر حذف البطاقة" });
+  }
+});
+
+router.post("/delete-obstacle", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "غير مصرح" });
+    }
+    const { obstacleId } = req.body;
+    if (!obstacleId) return res.status(400).json({ message: "obstacleId مطلوب" });
+
+    await pool.query(`DELETE FROM user_obstacles WHERE obstacle_id = $1`, [obstacleId]);
+    await pool.query(`DELETE FROM obstacles WHERE id = $1`, [obstacleId]);
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("خطأ في حذف العقبة:", error);
+    res.status(500).json({ message: "تعذر حذف العقبة" });
   }
 });
 

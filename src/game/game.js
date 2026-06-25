@@ -2,7 +2,8 @@ import { DEFAULT_CONTENT } from "./content.js";
 import mapLayout from "./content/map-layout.json";
 import { renderAuthView } from "./auth-view.js";
 import { getToken, getUser, logout } from "./auth.js";
-import { getContent, getProgress, completeDoorOnServer, resolveObstacleOnServer, saveDoorOnServer } from "./api.js";
+import { getContent, getProgress, completeDoorOnServer, resolveObstacleOnServer, saveDoorOnServer, addDoorOnServer, deleteDoorOnServer, saveCardOnServer, addCardOnServer, deleteCardOnServer, saveObstacleOnServer, addObstacleOnServer, deleteObstacleOnServer, resetProgressOnServer } from "./api.js";
+
 const SAVE_VERSION = 6;
 
 const FALLBACK_ASSETS = {
@@ -704,6 +705,31 @@ async function resolveObstacle(obstacle, viaCard = false) {
     render();
   }
 
+  async function adminSave(type, data) {
+    if (authToken && currentUser?.role?.trim() === "admin") {
+      try {
+        switch (type) {
+          case "door": await saveDoorOnServer(authToken, data); break;
+          case "add-door": await addDoorOnServer(data); break;
+          case "delete-door": await deleteDoorOnServer(data.doorId); break;
+          case "card": await saveCardOnServer(data); break;
+          case "add-card": await addCardOnServer(data); break;
+          case "delete-card": await deleteCardOnServer(data.cardId); break;
+          case "obstacle": await saveObstacleOnServer(data); break;
+          case "add-obstacle": await addObstacleOnServer(data); break;
+          case "delete-obstacle": await deleteObstacleOnServer(data.obstacleId); break;
+          case "reset-progress": await resetProgressOnServer(); break;
+        }
+        renderSaveState("تم الحفظ في السيرفر");
+      } catch (error) {
+        console.error("خطأ في الحفظ:", error);
+        renderSaveState("تعذر الحفظ");
+      }
+    } else {
+      await persist();
+    }
+  } 
+
   function handleChange(event) {
     const el = event.target;
     if (el.name && el.name.startsWith("match-")) {
@@ -738,6 +764,18 @@ async function resolveObstacle(obstacle, viaCard = false) {
       renderSaveState("تعذر حفظ الأسئلة");
     }
   }
+
+ function getNextId(prefix, array) {
+  let maxNum = 0;
+  for (const item of array) {
+    const match = item.id.match(new RegExp(`^${prefix}-(\\d+)$`));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return `${prefix}-${String(maxNum + 1).padStart(2, '0')}`;
+}
 
 async function handleClick(event) {
   const button = event.target.closest("button[data-action]");
@@ -839,52 +877,52 @@ async function handleClick(event) {
     render();
     return;
   }
-    if (action === "save-question") {
-      if (!tempQuestion) return;
-      const door = content.doors.find(d => d.id === editingDoorId);
-      if (!door) return;
-      if (!Array.isArray(door.questions)) door.questions = [];
-      tempQuestion = readQuestionFromForm(tempQuestion);
-      if (editingQuestionIdx === -2) {
-        door.questions.push(tempQuestion);
-      } else {
-        door.questions[editingQuestionIdx] = tempQuestion;
-      }
-      editingQuestionIdx = -1;
-      tempQuestion = null;
-      await saveDoorQuestionsToServer();
-      render();
-      return;
+  if (action === "save-question") {
+    if (!tempQuestion) return;
+    const door = content.doors.find(d => d.id === editingDoorId);
+    if (!door) return;
+    if (!Array.isArray(door.questions)) door.questions = [];
+    tempQuestion = readQuestionFromForm(tempQuestion);
+    if (editingQuestionIdx === -2) {
+      door.questions.push(tempQuestion);
+    } else {
+      door.questions[editingQuestionIdx] = tempQuestion;
     }
+    editingQuestionIdx = -1;
+    tempQuestion = null;
+    await saveDoorQuestionsToServer();
+    render();
+    return;
+  }
   if (action === "cancel-question") {
     editingQuestionIdx = -1;
     tempQuestion = null;
     render();
     return;
   }
-    if (action === "delete-question") {
-      const door = content.doors.find(d => d.id === editingDoorId);
-      if (!door || !Array.isArray(door.questions)) return;
-      const idx = Number(button.dataset.index);
-      door.questions.splice(idx, 1);
-      if (editingQuestionIdx === idx) { editingQuestionIdx = -1; tempQuestion = null; }
-      else if (editingQuestionIdx > idx) editingQuestionIdx--;
-      await saveDoorQuestionsToServer();
-      render();
-      return;
-    }
-    if (action === "move-question") {
-      const door = content.doors.find(d => d.id === editingDoorId);
-      if (!door || !Array.isArray(door.questions)) return;
-      const idx = Number(button.dataset.index);
-      const dir = button.dataset.dir === "up" ? -1 : 1;
-      const newIdx = idx + dir;
-      if (newIdx < 0 || newIdx >= door.questions.length) return;
-      [door.questions[idx], door.questions[newIdx]] = [door.questions[newIdx], door.questions[idx]];
-      await saveDoorQuestionsToServer();
-      render();
-      return;
-    }
+  if (action === "delete-question") {
+    const door = content.doors.find(d => d.id === editingDoorId);
+    if (!door || !Array.isArray(door.questions)) return;
+    const idx = Number(button.dataset.index);
+    door.questions.splice(idx, 1);
+    if (editingQuestionIdx === idx) { editingQuestionIdx = -1; tempQuestion = null; }
+    else if (editingQuestionIdx > idx) editingQuestionIdx--;
+    await saveDoorQuestionsToServer();
+    render();
+    return;
+  }
+  if (action === "move-question") {
+    const door = content.doors.find(d => d.id === editingDoorId);
+    if (!door || !Array.isArray(door.questions)) return;
+    const idx = Number(button.dataset.index);
+    const dir = button.dataset.dir === "up" ? -1 : 1;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= door.questions.length) return;
+    [door.questions[idx], door.questions[newIdx]] = [door.questions[newIdx], door.questions[idx]];
+    await saveDoorQuestionsToServer();
+    render();
+    return;
+  }
   if (action === "change-q-type") {
     if (!tempQuestion) return;
     const newType = button.dataset.type || "mcq";
@@ -1073,17 +1111,18 @@ async function handleClick(event) {
     content.doors.push(newDoor);
     editingDoorId = newDoor.id;
     selectedDoorId = newDoor.id;
-    persist();
+    await adminSave("add-door", newDoor);
     render();
   }
   if (action === "delete-door") {
     if (content.doors.length <= 1) return;
-    content.doors = content.doors.filter((door) => door.id !== id);
-    content.obstacles = content.obstacles.filter((obstacle) => obstacle.gateAfter !== id);
-    progress.completedDoors = progress.completedDoors.filter((doorId) => doorId !== id);
+    const deletedId = id;
+    content.doors = content.doors.filter((door) => door.id !== deletedId);
+    content.obstacles = content.obstacles.filter((obstacle) => obstacle.gateAfter !== deletedId);
+    progress.completedDoors = progress.completedDoors.filter((doorId) => doorId !== deletedId);
     selectedDoorId = content.doors[0]?.id || "";
     editingDoorId = selectedDoorId;
-    persist();
+    await adminSave("delete-door", { doorId: deletedId });
     render();
   }
   if (action === "edit-card") {
@@ -1094,50 +1133,65 @@ async function handleClick(event) {
     panelOpen = false;
     render();
   }
-  if (action === "new-card") {
-    const newCard = { id: uid("card"), title: "بطاقة جديدة", icon: "نجمة", power: "اكتب أثر البطاقة داخل الرحلة." };
-    content.cards.push(newCard);
-    editingCardId = newCard.id;
-    persist();
-    render();
-  }
+if (action === "new-card") {
+    const newCard = { id: getNextId("card", content.cards), title: "بطاقة جديدة", icon: "نجمة", power: "اكتب أثر البطاقة داخل الرحلة." };
+  content.cards.push(newCard);
+  editingCardId = newCard.id;
+  await adminSave("add-card", {
+    cardId: newCard.id,
+    title: newCard.title,
+    icon: newCard.icon,
+    power: newCard.power,
+  });
+  render();
+}
   if (action === "delete-card") {
-    content.cards = content.cards.filter((card) => card.id !== id);
-    progress.cards = progress.cards.filter((cardId) => cardId !== id);
+    const deletedId = id;
+    content.cards = content.cards.filter((card) => card.id !== deletedId);
+    progress.cards = progress.cards.filter((cardId) => cardId !== deletedId);
     editingCardId = content.cards[0]?.id || "";
-    persist();
+    await adminSave("delete-card", { cardId: deletedId });
     render();
   }
   if (action === "edit-obstacle") {
     editingObstacleId = id;
     render();
   }
-  if (action === "new-obstacle") {
+if (action === "new-obstacle") {
     const newObstacle = {
-      id: uid("obstacle"),
+      id: getNextId("obstacle", content.obstacles),
       title: "عقبة جديدة",
-      gateAfter: content.doors[0]?.id || "",
-      requiredCardId: content.cards[0]?.id || "",
-      prompt: "ما التصرف المناسب لتجاوز هذه العقبة؟",
-      options: ["اختيار صحيح", "اختيار بعيد", "اختيار مشتت"],
-      answerIndex: 0,
-    };
-    content.obstacles.push(newObstacle);
-    editingObstacleId = newObstacle.id;
-    persist();
-    render();
-  }
+    gateAfter: content.doors[0]?.id || "",
+    requiredCardId: content.cards[0]?.id || "",
+    prompt: "ما التصرف المناسب لتجاوز هذه العقبة؟",
+    options: ["اختيار صحيح", "اختيار بعيد", "اختيار مشتت"],
+    answerIndex: 0,
+  };
+  content.obstacles.push(newObstacle);
+  editingObstacleId = newObstacle.id;
+  await adminSave("add-obstacle", {
+    obstacleId: newObstacle.id,
+    title: newObstacle.title,
+    gateAfter: newObstacle.gateAfter,
+    requiredCardId: newObstacle.requiredCardId,
+    prompt: newObstacle.prompt,
+    options: newObstacle.options,
+    answerIndex: newObstacle.answerIndex,
+  });
+  render();
+}
   if (action === "delete-obstacle") {
-    content.obstacles = content.obstacles.filter((obstacle) => obstacle.id !== id);
-    progress.resolvedObstacles = progress.resolvedObstacles.filter((obstacleId) => obstacleId !== id);
+    const deletedId = id;
+    content.obstacles = content.obstacles.filter((obstacle) => obstacle.id !== deletedId);
+    progress.resolvedObstacles = progress.resolvedObstacles.filter((obstacleId) => obstacleId !== deletedId);
     editingObstacleId = content.obstacles[0]?.id || "";
-    persist();
+    await adminSave("delete-obstacle", { obstacleId: deletedId });
     render();
   }
   if (action === "reset-progress") {
     progress = normalizeProgress();
     resetChallenge();
-    persist();
+    await adminSave("reset-progress", {});
     render();
   }
   if (action === "reset-content") {
@@ -1149,7 +1203,7 @@ async function handleClick(event) {
     editingCardId = content.cards[0]?.id || "";
     editingObstacleId = content.obstacles[0]?.id || "";
 
-    persist();
+    await persist();
     render();
   }
 }
@@ -1202,6 +1256,9 @@ async function handleClick(event) {
       card.title = String(data.get("title") || card.title).trim();
       card.icon = String(data.get("icon") || "").trim();
       card.power = String(data.get("power") || "").trim();
+      await adminSave("card", { cardId: card.id, title: card.title, icon: card.icon, power: card.power });
+      render();
+      return;
     }
     if (type === "obstacle") {
       const obstacle = content.obstacles.find((item) => item.id === data.get("id"));
@@ -1215,9 +1272,16 @@ async function handleClick(event) {
       obstacle.referenceType = String(data.get("referenceType") || "article");
       obstacle.referenceTitle = String(data.get("referenceTitle") || "").trim();
       obstacle.referenceLink = String(data.get("referenceLink") || "").trim();
+      await adminSave("obstacle", {
+        obstacleId: obstacle.id, title: obstacle.title, gateAfter: obstacle.gateAfter,
+        requiredCardId: obstacle.requiredCardId, prompt: obstacle.prompt, options: obstacle.options,
+        answerIndex: obstacle.answerIndex, referenceType: obstacle.referenceType,
+        referenceTitle: obstacle.referenceTitle, referenceLink: obstacle.referenceLink,
+      });
+      render();
+      return;
     }
-    feedback = "تم تحديث المحتوى التجريبي.";
-    persist();
+    feedback = "تم تحديث المحتوى.";
     render();
   }
 
