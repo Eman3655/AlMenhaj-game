@@ -15,6 +15,11 @@ const FALLBACK_ASSETS = {
   KEY: "/generated-images/key.png",
   OBSTACLE_TOKEN: "/generated-images/obstacle_token.png",
   STUDENT_EXPLORER: "/generated-images/student_explorer.png",
+  NASHEED_1: "/generated-audio/nasheed_1.mp3",
+  NASHEED_2: "/generated-audio/nasheed_2.mp3",
+  NASHEED_3: "/generated-audio/nasheed_3.mp3",
+  NASHEED_4: "/generated-audio/nasheed_4.mp3",
+
 };
 
 const MAP_COORD_WIDTH = 100;
@@ -206,6 +211,11 @@ let editingQuestionIdx = -1;
 let tempQuestion = null;
 let matchSelections = {};
 let fillAnswer = "";
+let currentMatchShuffle = [];
+let bgAudio = null;
+let musicPlaylist = [];
+let currentTrackIndex = 0;
+let isMusicPlaying = false;
   function playTone(type = "tap") {
     if (!audioContext) return;
     const oscillator = audioContext.createOscillator();
@@ -232,6 +242,64 @@ let fillAnswer = "";
     }
   }
 
+    function initMusic() {
+    if (bgAudio) return;   
+    bgAudio = new Audio();
+    bgAudio.volume = 0.1; 
+    
+    musicPlaylist = [
+      getAssetUrl(assets, "NASHEED_1"),
+      getAssetUrl(assets, "NASHEED_2"),
+      getAssetUrl(assets, "NASHEED_3"),
+      getAssetUrl(assets, "NASHEED_4"),
+    ].filter(url => url && !url.includes("undefined"));
+
+    bgAudio.addEventListener("ended", playNextTrack);
+    bgAudio.addEventListener("error", playNextTrack);
+  }
+
+  function playNextTrack() {
+    if (musicPlaylist.length === 0) return;
+    currentTrackIndex = (currentTrackIndex + 1) % musicPlaylist.length;
+    bgAudio.src = musicPlaylist[currentTrackIndex];
+    if (isMusicPlaying) {
+      bgAudio.play().catch(() => {});
+    }
+  }
+
+  function startMusic() {
+    if (musicPlaylist.length === 0) return;
+    bgAudio.src = musicPlaylist[currentTrackIndex];
+    bgAudio.play().then(() => {
+      isMusicPlaying = true;
+      renderMusicToggle();  
+    }).catch((e) => {
+      console.log("تعذر تشغيل الموسيقى تلقائياً:", e.message);
+    });
+  }
+
+  function toggleMusic() {
+    if (!bgAudio || musicPlaylist.length === 0) return;
+    
+    if (isMusicPlaying) {
+      bgAudio.pause();
+      isMusicPlaying = false;
+    } else {
+      bgAudio.play().then(() => {
+        isMusicPlaying = true;
+      }).catch(() => {});
+    }
+    renderMusicToggle();  
+  }
+
+  function renderMusicToggle() {
+    const btn = document.querySelector(".music-toggle");
+    if (btn) {
+      btn.innerHTML = isMusicPlaying ? "🔊" : "🔇";
+      btn.title = isMusicPlaying ? "كتم الموسيقى" : "تشغيل الموسيقى";
+    }
+  }
+
   async function pulse(pattern = 25) {
     try {
       if (sdk.device?.haptics?.isSupported?.()) await sdk.device.haptics.vibrate(pattern);
@@ -241,6 +309,8 @@ let fillAnswer = "";
   }
 
 async function loadSave() {
+    window.debugContent = content;  
+
   try {
     const serverContent = await getContent();
 
@@ -573,6 +643,13 @@ async function resolveObstacle(obstacle, viaCard = false) {
     feedback = "";
     phase = 1;
     miniPick = [];
+    matchSelections = {};
+    fillAnswer = "";
+    currentMatchShuffle = []; 
+        if (questions.length > 0 && questions[0].type === "match" && Array.isArray(questions[0].pairs)) {
+      currentMatchShuffle = [...questions[0].pairs.map(p => p.right)].sort(() => Math.random() - 0.5);
+    }
+
     render();
   }
 
@@ -590,7 +667,18 @@ async function resolveObstacle(obstacle, viaCard = false) {
     miniPick = [];
     matchSelections = {};
     fillAnswer = "";
-    const questions = getDoorQuestions(content.doors.find((door) => door.id === selectedDoorId));
+    currentMatchShuffle = [];  
+    
+    const door = content.doors.find((door) => door.id === selectedDoorId);
+    const questions = getDoorQuestions(door);
+    
+    if (currentQuestionIndex < questions.length) {
+      const nextQ = questions[currentQuestionIndex];
+      if (nextQ.type === "match" && Array.isArray(nextQ.pairs)) {
+        currentMatchShuffle = [...nextQ.pairs.map(p => p.right)].sort(() => Math.random() - 0.5);
+      }
+    }
+
     if (currentQuestionIndex >= questions.length) {
       currentQuestionIndex = questions.length;
     }
@@ -705,7 +793,7 @@ async function resolveObstacle(obstacle, viaCard = false) {
     render();
   }
 
-  async function adminSave(type, data) {
+ async function adminSave(type, data) {
     if (authToken && currentUser?.role?.trim() === "admin") {
       try {
         switch (type) {
@@ -715,8 +803,19 @@ async function resolveObstacle(obstacle, viaCard = false) {
           case "card": await saveCardOnServer(data); break;
           case "add-card": await addCardOnServer(data); break;
           case "delete-card": await deleteCardOnServer(data.cardId); break;
-          case "obstacle": await saveObstacleOnServer(data); break;
-          case "add-obstacle": await addObstacleOnServer(data); break;
+          case "obstacle":
+            // تأكد إرسال الحقول بالاسمين snake_case و camelCase
+            if (data.referenceTitle) data.reference_title = data.referenceTitle;
+            if (data.referenceLink) data.reference_link = data.referenceLink;
+            if (data.referenceType) data.reference_type = data.referenceType;
+            await saveObstacleOnServer(data);
+            break;
+          case "add-obstacle":
+            if (data.referenceTitle) data.reference_title = data.referenceTitle;
+            if (data.referenceLink) data.reference_link = data.referenceLink;
+            if (data.referenceType) data.reference_type = data.referenceType;
+            await addObstacleOnServer(data);
+            break;
           case "delete-obstacle": await deleteObstacleOnServer(data.obstacleId); break;
           case "reset-progress": await resetProgressOnServer(); break;
         }
@@ -728,8 +827,7 @@ async function resolveObstacle(obstacle, viaCard = false) {
     } else {
       await persist();
     }
-  } 
-
+  }
   function handleChange(event) {
     const el = event.target;
     if (el.name && el.name.startsWith("match-")) {
@@ -738,7 +836,52 @@ async function resolveObstacle(obstacle, viaCard = false) {
     if (el.id === "fill-answer-input") {
       fillAnswer = el.value;
     }
-  }   
+    
+    if (el.name === "questionType") {
+      const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
+      if (!obstacle) return;
+
+      const form = el.closest("form");
+      if (form) {
+        obstacle.title = String(form.querySelector('[name="title"]')?.value || obstacle.title).trim();
+        obstacle.prompt = String(form.querySelector('[name="prompt"]')?.value || obstacle.prompt).trim();
+        obstacle.gateAfter = String(form.querySelector('[name="gateAfter"]')?.value || obstacle.gateAfter);
+        obstacle.requiredCardId = String(form.querySelector('[name="requiredCardId"]')?.value || obstacle.requiredCardId);
+        
+        const refType = String(form.querySelector('[name="referenceType"]')?.value || "article");
+        const refTitle = String(form.querySelector('[name="referenceTitle"]')?.value || "").trim();
+        const refLink = String(form.querySelector('[name="referenceLink"]')?.value || "").trim();
+        obstacle.referenceType = refType;
+        obstacle.reference_type = refType;
+        obstacle.referenceTitle = refTitle;
+        obstacle.reference_title = refTitle;
+        obstacle.referenceLink = refLink;
+        obstacle.reference_link = refLink;
+
+        if (obstacle.questionType === "mcq") {
+           obstacle.options = splitList(form.querySelector('[name="options"]')?.value);
+           obstacle.answerIndex = Number(form.querySelector('[name="answerIndex"]')?.value) || 0;
+        }
+      }
+
+      const newType = el.value;
+      obstacle.questionType = newType;
+      obstacle.question_type = newType;
+      
+      if (newType === "fill" && !obstacle.acceptableAnswers?.length) {
+        obstacle.acceptableAnswers = [""];
+        obstacle.acceptable_answers = [""];
+      }
+      if (newType === "match" && !obstacle.matchPairs?.length) {
+        obstacle.matchPairs = [{ left: "", right: "" }];
+        obstacle.match_pairs = [{ left: "", right: "" }];
+      }
+      if (newType === "mcq" && (!obstacle.options || !obstacle.options.length)) {
+        obstacle.options = ["", "", ""];
+      }
+      render();
+    }
+  }    
 
   async function saveDoorQuestionsToServer() {
     if (!authToken || currentUser?.role?.trim() !== "admin") {
@@ -782,6 +925,10 @@ async function handleClick(event) {
   if (!button) return;
 
   const action = button.dataset.action;
+    if (action === "toggle-music") {
+    toggleMusic();
+    return;
+  }
   if (action === "toggle-hud") {
     hudCollapsed = !hudCollapsed;
     render();
@@ -796,6 +943,7 @@ async function handleClick(event) {
   const id = button.dataset.id;
 
   if (action === "logout") {
+    if(bgAudio) { bgAudio.pause(); isMusicPlaying = false; }
     logout();
     location.reload();
     return;
@@ -856,7 +1004,92 @@ async function handleClick(event) {
       playTone("error");
       render();
     }
+    return;
   }
+  
+  if (action === "submit-obstacle-fill") {
+    const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
+    if (!obstacle) return;
+    const answer = (fillAnswer || "").trim();
+    if (!answer) { feedback = "يرجى كتابة الإجابة."; render(); return; }
+    
+    let acceptable = [];
+    if (Array.isArray(obstacle.acceptableAnswers)) {
+      acceptable = obstacle.acceptableAnswers;
+    } else if (typeof obstacle.acceptableAnswers === 'string') {
+      try { acceptable = JSON.parse(obstacle.acceptableAnswers); } catch(e) { acceptable = []; }
+    }
+    acceptable = acceptable.map(a => String(a).trim().toLowerCase());
+    
+    if (acceptable.includes(answer.toLowerCase())) {
+      resolveObstacle(obstacle, false);
+    } else {
+      feedback = "إجابة خاطئة. حاول مرة أخرى.";
+      playTone("error");
+      render();
+    }
+    return;
+  }
+
+  if (action === "submit-obstacle-match") {
+    const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
+    if (!obstacle) return;
+    
+    let pairs = [];
+    if (Array.isArray(obstacle.matchPairs)) {
+      pairs = obstacle.matchPairs;
+    } else if (typeof obstacle.matchPairs === 'string') {
+      try { pairs = JSON.parse(obstacle.matchPairs); } catch(e) { pairs = []; }
+    }
+
+    let allSelected = true;
+    let correctCount = 0;
+    pairs.forEach((pair, i) => {
+      const selected = matchSelections[String(i)] || matchSelections[i];
+      if (!selected) { allSelected = false; return; }
+      if (selected === pair.right) correctCount++;
+    });
+    
+    if (!allSelected) { feedback = "يرجى توصيل جميع العناصر قبل التحقق."; render(); return; }
+    
+    if (correctCount === pairs.length) {
+      resolveObstacle(obstacle, false);
+    } else {
+      matchSelections = {};
+      feedback = `${correctCount} من ${pairs.length} صحيح. حاول مرة أخرى.`;
+      playTone("error"); 
+      render();
+    }
+    return;
+  }
+
+  if (action === "add-obs-fill") {
+    const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
+    if (!obstacle) return;
+    if (!obstacle.acceptableAnswers || !obstacle.acceptableAnswers.length) obstacle.acceptableAnswers = [""];
+    obstacle.acceptableAnswers.push("");
+    render(); return;
+  }
+  if (action === "remove-obs-fill") {
+    const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
+    if (!obstacle || !Array.isArray(obstacle.acceptableAnswers)) return;
+    obstacle.acceptableAnswers.splice(Number(button.dataset.index), 1);
+    render(); return;
+  }
+  if (action === "add-obs-pair") {
+    const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
+    if (!obstacle) return;
+    if (!obstacle.matchPairs || !obstacle.matchPairs.length) obstacle.matchPairs = [{ left: "", right: "" }];
+    obstacle.matchPairs.push({ left: "", right: "" });
+    render(); return;
+  }
+  if (action === "remove-obs-pair") {
+    const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
+    if (!obstacle || !Array.isArray(obstacle.matchPairs)) return;
+    obstacle.matchPairs.splice(Number(button.dataset.index), 1);
+    render(); return;
+  }
+
 
   if (action === "add-question") {
     const type = button.dataset.type || "mcq";
@@ -1017,17 +1250,19 @@ async function handleClick(event) {
     const questions = getDoorQuestions(door);
     const question = questions[currentQuestionIndex];
     if (!question || question.type !== "match") return;
+    
     const pairs = question.pairs || [];
-    const seed = currentQuestionIndex * 1000 + 42;
-    const displayPairs = seededShuffle(pairs, seed);
     let allSelected = true;
     let correctCount = 0;
-    displayPairs.forEach((pair, i) => {
+    
+    pairs.forEach((pair, i) => {
       const selected = matchSelections[String(i)] || matchSelections[i];
       if (!selected) { allSelected = false; return; }
       if (selected === pair.right) correctCount++;
     });
+    
     if (!allSelected) { feedback = "يرجى توصيل جميع العناصر قبل التحقق."; render(); return; }
+    
     if (correctCount === pairs.length) {
       const points = awardQuestionPoints(question, currentQuestionAttempts);
       feedback = `توصيل صحيح! حصلت على ${points} نقطة.`;
@@ -1263,20 +1498,73 @@ if (action === "new-obstacle") {
     if (type === "obstacle") {
       const obstacle = content.obstacles.find((item) => item.id === data.get("id"));
       if (!obstacle) return;
+      
       obstacle.title = String(data.get("title") || obstacle.title).trim();
-      obstacle.gateAfter = String(data.get("gateAfter") || "");
-      obstacle.requiredCardId = String(data.get("requiredCardId") || "");
-      obstacle.prompt = String(data.get("prompt") || "").trim();
-      obstacle.options = splitList(data.get("options"));
-      obstacle.answerIndex = Math.max(0, Math.min(Number(data.get("answerIndex")) || 0, obstacle.options.length - 1));
-      obstacle.referenceType = String(data.get("referenceType") || "article");
-      obstacle.referenceTitle = String(data.get("referenceTitle") || "").trim();
-      obstacle.referenceLink = String(data.get("referenceLink") || "").trim();
+      obstacle.gateAfter = String(data.get("gateAfter") || obstacle.gateAfter);
+      obstacle.requiredCardId = String(data.get("requiredCardId") || obstacle.requiredCardId);
+      obstacle.prompt = String(data.get("prompt") || obstacle.prompt).trim();
+      
+      const qType = String(data.get("questionType") || "mcq");
+      obstacle.questionType = qType;
+      obstacle.question_type = qType;
+
+      if (qType === "mcq") {
+        obstacle.options = splitList(data.get("options"));
+        obstacle.answerIndex = Math.max(0, Math.min(Number(data.get("answerIndex")) || 0, obstacle.options.length - 1));
+      } else if (qType === "fill") {
+        const fillAnswers = [];
+        let i = 0;
+        while (data.has(`q-obs-fill-${i}`)) {
+          const val = String(data.get(`q-obs-fill-${i}`) || "").trim();
+          if (val) fillAnswers.push(val);
+          i++;
+        }
+        obstacle.acceptableAnswers = fillAnswers.length ? fillAnswers : [""];
+        obstacle.acceptable_answers = obstacle.acceptableAnswers;
+      } else if (qType === "match") {
+        const pairs = [];
+        let i = 0;
+        while (data.has(`q-obs-pair-left-${i}`)) {
+          const left = String(data.get(`q-obs-pair-left-${i}`) || "").trim();
+          const right = String(data.get(`q-obs-pair-right-${i}`) || "").trim();
+          if (left || right) pairs.push({ left, right });
+          i++;
+        }
+        obstacle.matchPairs = pairs.length ? pairs : [{ left: "", right: "" }];
+        obstacle.match_pairs = obstacle.matchPairs;
+      }
+
+      const refType = String(data.get("referenceType") || obstacle.referenceType || "article");
+      const refTitle = String(data.get("referenceTitle") || "").trim() || obstacle.referenceTitle || "";
+      const refLink = String(data.get("referenceLink") || "").trim() || obstacle.referenceLink || "";
+
+      obstacle.referenceType = refType;
+      obstacle.reference_type = refType;
+      obstacle.referenceTitle = refTitle;
+      obstacle.reference_title = refTitle;
+      obstacle.referenceLink = refLink;
+      obstacle.reference_link = refLink;
+
       await adminSave("obstacle", {
-        obstacleId: obstacle.id, title: obstacle.title, gateAfter: obstacle.gateAfter,
-        requiredCardId: obstacle.requiredCardId, prompt: obstacle.prompt, options: obstacle.options,
-        answerIndex: obstacle.answerIndex, referenceType: obstacle.referenceType,
-        referenceTitle: obstacle.referenceTitle, referenceLink: obstacle.referenceLink,
+        obstacleId: obstacle.id,
+        title: obstacle.title,
+        gateAfter: obstacle.gateAfter,
+        requiredCardId: obstacle.requiredCardId,
+        prompt: obstacle.prompt,
+        questionType: qType,
+        question_type: qType,
+        options: qType === "mcq" ? obstacle.options : undefined, // undefined يمنع المسح
+        answerIndex: qType === "mcq" ? obstacle.answerIndex : undefined,
+        acceptableAnswers: qType === "fill" ? obstacle.acceptableAnswers : undefined,
+        acceptable_answers: qType === "fill" ? obstacle.acceptable_answers : undefined,
+        matchPairs: qType === "match" ? obstacle.matchPairs : undefined,
+        match_pairs: qType === "match" ? obstacle.match_pairs : undefined,
+        referenceType: refType,
+        reference_type: refType,
+        referenceTitle: refTitle,
+        reference_title: refTitle,
+        referenceLink: refLink,
+        reference_link: refLink,
       });
       render();
       return;
@@ -1326,9 +1614,13 @@ ${renderHitAnimation()}
 
 document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
 
-shell.insertAdjacentHTML(
-  "afterend",
-  `
+  shell.insertAdjacentHTML(
+    "afterend",
+    `
+    <button class="floating-toggle music-toggle" data-action="toggle-music" title="تشغيل الموسيقى">
+      ${isMusicPlaying ? "🔊" : "🔇"}
+    </button>
+
     <button class="floating-toggle top-toggle" data-action="toggle-hud">
       ${hudCollapsed ? "📊" : "✕"}
     </button>
@@ -1432,6 +1724,7 @@ function renderTreasure() {
     `;
 }
 
+
 function renderMap(stats) {
   const panelContent = selectedObstacleId ? renderObstaclePanel() : renderDoorPanel(stats);
   const isOverlayOpen = panelOpen;
@@ -1452,8 +1745,8 @@ function renderMap(stats) {
 
       ${isOverlayOpen ? `<div class="map-overlay-backdrop"></div>` : ""}
 
-      ${isOverlayOpen ? `<aside class="quest-panel quest-overlay">${panelContent}<button class="overlay-close" data-action="close-overlay" aria-label="إغلاق">×</button></aside>` : ""}
-    </div>
+      ${isOverlayOpen ? `<aside class="quest-panel quest-overlay"><button class="overlay-close" data-action="close-overlay" aria-label="إغلاق">×</button>${panelContent}</aside>` : ""}
+          </div>
   `;
 }
 
@@ -1575,7 +1868,7 @@ function renderPlayerMarker() {
     }
     if (phase === 0) {
       return `
-        <p>${escapeHtml(door.summary)}</p>
+        <div class="door-summary-text">${escapeHtml(door.summary)}</div>
         <div class="mind-map">${escapeHtml(door.illustration || "رسم توضيحي مختصر")}</div>
         <div class="key-grid">${door.keyPoints.map((point) => `<span>${escapeHtml(point)}</span>`).join("")}</div>
         <div class="panel-actions">
@@ -1631,13 +1924,12 @@ function renderPlayerMarker() {
 
       if (question.type === "match") {
         const pairs = question.pairs || [];
-        const seed = currentQuestionIndex * 1000 + 42;
-        const displayPairs = seededShuffle(pairs, seed);
-        const rightOptions = seededShuffle(pairs.map(p => p.right), seed + 777);
+        const rightOptions = currentMatchShuffle.length ? currentMatchShuffle : pairs.map(p => p.right);
+        
         return `
           <p class="eyebrow">${escapeHtml(question.prompt || "صل كل عنصر بما يناسبه")}</p>
           <div class="match-board">
-            ${displayPairs.map((pair, i) => `
+            ${pairs.map((pair, i) => `
               <div class="match-row">
                 <span class="match-left">${escapeHtml(pair.left)}</span>
                 <select name="match-${i}" class="match-select">
@@ -1764,48 +2056,87 @@ function readQuestionFromForm(q) {
   }
 
 function renderObstaclePanel() {
-  const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
-  if (!obstacle) return "";
+    const obstacle = content.obstacles.find((item) => item.id === selectedObstacleId);
+    if (!obstacle) return "";
+    const card = content.cards.find((item) => item.id === obstacle.requiredCardId);
+    const ownsCard = progress.cards.includes(obstacle.requiredCardId);
 
-  const hasCard = progress.cards.includes(obstacle.requiredCardId);
-  const card = content.cards.find((c) => c.id === obstacle.requiredCardId);
+    const refTitle = obstacle.referenceTitle || obstacle.reference_title || "";
+    const refLink = obstacle.referenceLink || obstacle.reference_link || "";
 
-  const referenceSection = (obstacle.referenceTitle || obstacle.referenceLink)
-    ? `
-      <div class="obstacle-reference" style="margin: 12px 0; padding: 12px; background: rgba(255,255,255,0.1); border-radius: 8px; border-right: 3px solid #fbbf24;">
-        ${obstacle.referenceType ? `<span style="font-size:11px; opacity:0.7; display:block; margin-bottom:4px;">${escapeHtml(obstacle.referenceType)}</span>` : ""}
-        ${obstacle.referenceTitle ? `<strong style="display:block; margin-bottom:6px; font-size:14px;">${escapeHtml(obstacle.referenceTitle)}</strong>` : ""}
-        ${obstacle.referenceLink ? `<a href="${escapeHtml(obstacle.referenceLink)}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; font-size:13px; text-decoration:underline;">🔗 افتح المرجع</a>` : ""}
-      </div>
-    `
-    : "";
+    let referenceSection = "";
+    if (refTitle || refLink) {
+      referenceSection = `
+        <div class="obstacle-reference">
+          <div class="reference-label">📄 المرجع</div>
+          ${refTitle ? `<p class="reference-title">${escapeHtml(refTitle)}</p>` : ""}
+          ${refLink ? `
+            <a class="reference-link" href="${escapeHtml(refLink)}" target="_blank" rel="noopener noreferrer">
+              🔗 رابط المرجع
+            </a>
+          ` : ""}
+        </div>
+      `;
+    }
 
-  return `
-    <div class="obstacle-panel-content">
-      <h3 style="margin:0 0 12px 0; color:#fbbf24;">⚡ عقبة: ${escapeHtml(obstacle.title)}</h3>
-      
+    const qType = obstacle.questionType || obstacle.question_type || 'mcq';
+    let questionSection = "";
+
+    if (qType === "mcq") {
+      questionSection = `
+        <div class="option-list obstacle-options">
+          ${(obstacle.options || []).map((option, index) => `<button class="option-button" data-action="answer-obstacle" data-index="${index}">${escapeHtml(option)}</button>`).join("")}
+        </div>
+      `;
+    } else if (qType === "fill") {
+      questionSection = `
+        <div class="fill-board">
+          <input type="text" id="fill-answer-input" class="fill-input" value="${escapeHtml(fillAnswer)}" placeholder="اكتب إجابتك هنا" autocomplete="off" />
+          <button class="primary-button full" data-action="submit-obstacle-fill">تحقق</button>
+        </div>
+      `;
+    } else if (qType === "match") {
+      const pairs = obstacle.matchPairs || obstacle.match_pairs || [];
+      const seed = 42;
+      const displayPairs = seededShuffle(pairs, seed);
+      const rightOptions = seededShuffle(pairs.map(p => p.right), seed + 777);
+      questionSection = `
+        <div class="match-board">
+          ${displayPairs.map((pair, i) => `
+            <div class="match-row">
+              <span class="match-left">${escapeHtml(pair.left)}</span>
+              <select name="match-${i}" class="match-select">
+                <option value="">← اختر</option>
+                ${rightOptions.map(r => `<option value="${escapeHtml(r)}" ${matchSelections[String(i)] === r ? "selected" : ""}>${escapeHtml(r)}</option>`).join("")}
+              </select>
+            </div>
+          `).join("")}
+        </div>
+        <div class="panel-actions">
+          <button class="primary-button full" data-action="submit-obstacle-match">تحقق من التوصيل</button>
+        </div>
+      `;
+    }
+
+    return `
+      <p class="eyebrow">عقبة في الطريق</p>
+      <h2>${escapeHtml(obstacle.title)}</h2>
       ${referenceSection}
-
-      <p style="margin:16px 0; line-height:1.8; font-size:15px;">${escapeHtml(obstacle.prompt)}</p>
-      
-      ${feedback ? `<div style="padding:10px; border-radius:6px; background:rgba(239,68,68,0.15); color:#fca5a5; margin-bottom:12px; font-size:14px;">${escapeHtml(feedback)}</div>` : ""}
-      
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        ${obstacle.options.map((opt, i) => `
-          <button class="obstacle-option-btn" data-action="answer-obstacle" data-index="${i}" style="padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:#fff; cursor:pointer; text-align:right; font-size:14px; transition:0.2s;">
-            ${escapeHtml(opt)}
-          </button>
-        `).join("")}
+      <p>${escapeHtml(obstacle.prompt)}</p>
+      <div class="obstacle-card">
+        <img src="${assetUrls.OBSTACLE_TOKEN}" alt="" draggable="false" />
+        <div>
+          <strong>البطاقة المناسبة: ${escapeHtml(card?.title || "غير محددة")}</strong>
+          <span>${ownsCard ? "تملك هذه البطاقة ويمكنك استخدامها." : "يمكنك الإجابة بدلًا من استخدام البطاقة."}</span>
+        </div>
       </div>
-
-      ${hasCard && card ? `
-        <button data-action="use-card" style="margin-top:12px; width:100%; padding:12px; border-radius:8px; border:1px solid #fbbf24; background:rgba(251,191,36,0.15); color:#fbbf24; cursor:pointer; font-size:14px; font-weight:bold;">
-          🃏 استخدم بطاقة: ${escapeHtml(card.title)}
-        </button>
-      ` : ""}
-    </div>
-  `;
-}
+      <div class="panel-actions">
+        <button class="ghost-button" data-action="use-card">استخدم البطاقة</button>
+      </div>
+      ${questionSection}
+      ${feedback ? `<p class="feedback">${escapeHtml(feedback)}</p>` : ""}
+    `;
+  }
 
 function renderStudent(stats) {
   const completed = completedSet();
@@ -2217,6 +2548,57 @@ function renderStudent(stats) {
   function renderObstacleAdmin() {
     const obstacle = content.obstacles.find((item) => item.id === editingObstacleId) || content.obstacles[0];
     if (!obstacle) return `<div class="empty-panel">لا توجد عقبات.</div>`;
+    
+    const qType = obstacle.questionType || obstacle.question_type || 'mcq';
+
+    let questionFields = "";
+    if (qType === "mcq") {
+      const opts = Array.isArray(obstacle.options) ? obstacle.options : [];
+      questionFields = `
+        ${field("الاختيارات (فواصل)", "options", opts.join("، "))}
+        ${field("رقم الإجابة الصحيحة", "answerIndex", obstacle.answerIndex, "number")}
+      `;
+    } else if (qType === "fill") {
+      let answers = obstacle.acceptableAnswers || obstacle.acceptable_answers || [""];
+      if (typeof answers === 'string') {
+        try { answers = JSON.parse(answers); } catch(e) { answers = [""]; }
+      }
+      if (!Array.isArray(answers) || !answers.length) answers = [""];
+      
+      questionFields = `
+        <div class="q-fill-editor">
+          <label>الإجابات المقبولة (صيغ بديلة)</label>
+          ${answers.map((a, i) => `
+            <div class="q-fill-row">
+              <input type="text" name="q-obs-fill-${i}" value="${escapeHtml(a)}" placeholder="إجابة مقبولة" />
+              ${answers.length > 1 ? `<button type="button" class="danger q-remove-btn" data-action="remove-obs-fill" data-index="${i}">✕</button>` : ""}
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-obs-fill">+ إجابة بديلة</button>
+        </div>
+      `;
+    } else if (qType === "match") {
+      let pairs = obstacle.matchPairs || obstacle.match_pairs || [{ left: "", right: "" }];
+      if (typeof pairs === 'string') {
+        try { pairs = JSON.parse(pairs); } catch(e) { pairs = [{ left: "", right: "" }]; }
+      }
+      if (!Array.isArray(pairs) || !pairs.length) pairs = [{ left: "", right: "" }];
+
+      questionFields = `
+        <div class="q-pairs-editor">
+          <label>أزواج الوصل</label>
+          ${pairs.map((p, i) => `
+            <div class="q-pair-row">
+              <input type="text" name="q-obs-pair-left-${i}" value="${escapeHtml(p.left)}" placeholder="الطرف الأيسر" />
+              <span>↔</span>
+              <input type="text" name="q-obs-pair-right-${i}" value="${escapeHtml(p.right)}" placeholder="الطرف الأيمن" />
+              ${pairs.length > 2 ? `<button type="button" class="danger q-remove-btn" data-action="remove-obs-pair" data-index="${i}">✕</button>` : ""}
+            </div>
+          `).join("")}
+          <button type="button" class="ghost-button" data-action="add-obs-pair">+ إضافة زوج</button>
+        </div>
+      `;
+    }
 
     return `
       <div class="admin-layout">
@@ -2236,21 +2618,28 @@ function renderStudent(stats) {
             ${content.doors.map((d) => `<option value="${escapeHtml(d.id)}" ${d.id === obstacle.gateAfter ? "selected" : ""}>${escapeHtml(d.title)}</option>`).join("")}
           </select></label>
           <label>البطاقة المطلوبة<select name="requiredCardId">
-            <option value="">بدون بطاقة (يرجع للمرجع)</option>
+            <option value="">بدون بطاقة</option>
             ${content.cards.map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === obstacle.requiredCardId ? "selected" : ""}>${escapeHtml(c.title)}</option>`).join("")}
           </select></label>
           ${field("نص سؤال العقبة", "prompt", obstacle.prompt)}
-          ${field("الاختيارات (فواصل)", "options", (obstacle.options || []).join("، "))}
-          ${field("رقم الإجابة الصحيحة", "answerIndex", obstacle.answerIndex, "number")}
+          
+          <label>نوع سؤال العقبة<select name="questionType">
+            <option value="mcq" ${qType === "mcq" ? "selected" : ""}>اختيار من متعدد</option>
+            <option value="fill" ${qType === "fill" ? "selected" : ""}>أكمل الفراغ</option>
+            <option value="match" ${qType === "match" ? "selected" : ""}>وصل</option>
+          </select></label>
+
+          ${questionFields}
+
           <div class="ref-section">
-            <h4>📌 المرجع (يظهر إذا لم يملك الطالب البطاقة)</h4>
+            <h4>📌 المرجع (يظهر دائماً إذا كان موجود)</h4>
             <label>نوع المرجع<select name="referenceType">
-              <option value="article" ${obstacle.referenceType === "article" ? "selected" : ""}>مقال</option>
+              <option value="article" ${(obstacle.referenceType || "article") === "article" ? "selected" : ""}>مقال</option>
               <option value="video" ${obstacle.referenceType === "video" ? "selected" : ""}>فيديو</option>
               <option value="book" ${obstacle.referenceType === "book" ? "selected" : ""}>كتاب</option>
             </select></label>
-            ${field("عنوان المرجع", "referenceTitle", obstacle.referenceTitle || "")}
-            ${field("رابط المرجع", "referenceLink", obstacle.referenceLink || "")}
+            ${field("عنوان المرجع", "referenceTitle", obstacle.referenceTitle || obstacle.reference_title || "")}
+            ${field("رابط المرجع", "referenceLink", obstacle.referenceLink || obstacle.reference_link || "")}
           </div>
           <button type="submit" class="primary-button full">حفظ التعديلات</button>
         </form>
@@ -2315,6 +2704,8 @@ start() {
     if (!imagesReady || !saveReady || started) return;
     started = true;
     await unlockAudio();
+    initMusic();
+    startMusic();
     overlay.hidden = true;
     shell.hidden = false;
     playTone("success");
@@ -2357,6 +2748,7 @@ start() {
   }
 
   cleanup = async () => {
+    if(bgAudio) { bgAudio.pause(); bgAudio.src = ""; }
     root.removeEventListener("click", handleClick);
     root.removeEventListener("submit", handleSubmit);
     if (audioHandle?.dispose) await audioHandle.dispose();

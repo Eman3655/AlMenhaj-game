@@ -48,15 +48,29 @@ router.get("/content", async (req, res) => {
         icon: card.icon,
         power: card.power,
       })),
-      obstacles: obstacles.rows.map((item) => ({
-        id: item.id,
-        title: item.title,
-        gateAfter: item.gate_after,
-        requiredCardId: item.required_card_id,
-        prompt: item.prompt,
-        options: item.options || [],
-        answerIndex: item.answer_index,
-      })),
+      obstacles: obstacles.rows.map((item) => {
+        let parsedAnswers = [];
+        try { parsedAnswers = JSON.parse(item.acceptable_answers || '[]'); } catch(e) { parsedAnswers = []; }
+        
+        let parsedPairs = [];
+        try { parsedPairs = JSON.parse(item.match_pairs || '[]'); } catch(e) { parsedPairs = []; }
+
+        return {
+          id: item.id,
+          title: item.title,
+          gateAfter: item.gate_after,
+          requiredCardId: item.required_card_id,
+          prompt: item.prompt,
+          options: item.options || [],
+          answerIndex: item.answer_index,
+          questionType: item.question_type || "mcq",
+          acceptableAnswers: parsedAnswers,
+          matchPairs: parsedPairs,
+          referenceType: item.reference_type || "article",
+          referenceTitle: item.reference_title || "",
+          referenceLink: item.reference_link || "",
+        };
+      }),
     });
   } catch (error) {
     console.error(error);
@@ -239,7 +253,6 @@ router.post("/save-door", auth, async (req, res) => {
       return res.status(400).json({ message: "doorId مطلوب" });
     }
 
-    // معالجة قاتلة للـ keyPoints: نضمن دائماً أنه نص JSON صالح
     let finalKeyPoints = keyPoints;
     if (Array.isArray(finalKeyPoints)) {
       finalKeyPoints = JSON.stringify(finalKeyPoints);
@@ -254,7 +267,6 @@ router.post("/save-door", auth, async (req, res) => {
       finalKeyPoints = null;
     }
 
-    // معالجة قاتلة للـ questions: نضمن دائماً أنه نص JSON صالح
     let finalQuestions = questions;
     if (Array.isArray(finalQuestions)) {
       finalQuestions = JSON.stringify(finalQuestions);
@@ -269,7 +281,6 @@ router.post("/save-door", auth, async (req, res) => {
       finalQuestions = null;
     }
 
-    // لاحظ إضافة ::jsonb في الاستعلام لإجبار قاعدة البيانات على قراءة النص كـ JSON
     await pool.query(
       `UPDATE doors SET 
         title = COALESCE($1, title),
@@ -320,23 +331,21 @@ router.post("/save-obstacle", auth, async (req, res) => {
       return res.status(403).json({ message: "غير مصرح" });
     }
 
-    const { obstacleId, title, gateAfter, requiredCardId, prompt, options, answerIndex, referenceType, referenceTitle, referenceLink } = req.body;
+    const { obstacleId, title, gateAfter, requiredCardId, prompt, options, answerIndex, questionType, acceptableAnswers, matchPairs, referenceType, referenceTitle, referenceLink } = req.body;
     if (!obstacleId) return res.status(400).json({ message: "obstacleId مطلوب" });
 
-    // معالجة قاتلة للـ options
-    let finalOptions = options;
-    if (Array.isArray(finalOptions)) {
-      finalOptions = JSON.stringify(finalOptions);
-    } else if (typeof finalOptions === 'string') {
-      try {
-        const parsed = JSON.parse(finalOptions);
-        finalOptions = JSON.stringify(Array.isArray(parsed) ? parsed : [finalOptions]);
-      } catch (e) {
-        finalOptions = JSON.stringify([finalOptions]);
+    const safeJson = (arr) => {
+      if (arr === undefined || arr === null) return null; 
+      if (Array.isArray(arr)) return JSON.stringify(arr);
+      if (typeof arr === 'string') {
+        try { return JSON.stringify(JSON.parse(arr)); } catch(e) { return JSON.stringify([arr]); }
       }
-    } else {
-      finalOptions = null;
-    }
+      return '[]';
+    };
+
+    const finalOptions = safeJson(options);
+    const finalAcceptableAnswers = safeJson(acceptableAnswers);
+    const finalMatchPairs = safeJson(matchPairs);
 
     await pool.query(
       `UPDATE obstacles SET 
@@ -346,11 +355,14 @@ router.post("/save-obstacle", auth, async (req, res) => {
         prompt = COALESCE($4, prompt),
         options = COALESCE($5::jsonb, options),
         answer_index = COALESCE($6, answer_index),
-        reference_type = COALESCE($7, reference_type),
-        reference_title = COALESCE($8, reference_title),
-        reference_link = COALESCE($9, reference_link)
-      WHERE id = $10`,
-      [title, gateAfter, requiredCardId, prompt, finalOptions, answerIndex, referenceType, referenceTitle, referenceLink, obstacleId]
+        question_type = COALESCE($7, question_type),
+        acceptable_answers = COALESCE($8, acceptable_answers),
+        match_pairs = COALESCE($9, match_pairs),
+        reference_type = COALESCE($10, reference_type),
+        reference_title = COALESCE($11, reference_title),
+        reference_link = COALESCE($12, reference_link)
+      WHERE id = $13`,
+      [title, gateAfter, requiredCardId, prompt, finalOptions, answerIndex, questionType || "mcq", finalAcceptableAnswers, finalMatchPairs, referenceType || "article", referenceTitle, referenceLink, obstacleId]
     );
 
     res.json({ ok: true });
@@ -415,7 +427,6 @@ router.post("/add-obstacle", auth, async (req, res) => {
     const { obstacleId, title, gateAfter, requiredCardId, prompt, options, answerIndex, referenceType, referenceTitle, referenceLink } = req.body;
     if (!obstacleId || !title) return res.status(400).json({ message: "obstacleId و title مطلوبان" });
 
-    // معالجة قاتلة للـ options
     let finalOptions = options;
     if (Array.isArray(finalOptions)) {
       finalOptions = JSON.stringify(finalOptions);

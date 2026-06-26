@@ -2172,7 +2172,6 @@ button {
   .qb-item-actions { width: 100%; justify-content: flex-end; }
 }
 
-/* === أنواع الأسئلة الجديدة === */
 
 .tf-list {
   display: grid;
@@ -2274,5 +2273,120 @@ button {
   }
   .tf-list {
     grid-template-columns: 1fr;
+  }
+}
+
+.obstacle-reference {
+  background: linear-gradient(135deg, #f0f4ff, #e8eeff);
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 14px 0;
+  direction: rtl;
+}
+
+.reference-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6366f1;
+  margin-bottom: 6px;
+}
+
+.reference-title {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e1b4b;
+  line-height: 1.7;
+}
+
+.reference-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #6366f1;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reference-link:hover {
+  background: #4f46e5;
+}
+
+.music-toggle {
+  top: 12px !important;
+  left: 12px !important;
+  right: auto !important;
+  font-size: 20px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+}
+
+.top-toggle {
+  left: 55px !important; 
+  right: auto !important;
+}
+
+.quest-overlay {
+  position: relative;
+  padding-top: 40px !important; 
+}
+
+.overlay-close {
+  position: absolute;
+  top: 10px;
+  left: 15px; 
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  font-size: 18px;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 10;
+  line-height: 1;
+}
+
+.overlay-close:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.door-summary-text {
+  line-height: 2;  
+  margin-bottom: 15px;
+  white-space: pre-line; 
+}
+
+@media (max-width: 768px) {
+  .map-node,
+  .obstacle-node,
+  .treasure-goal {
+    transform: translate(-50%, -50%) scale(0.65) !important;
+  }
+
+  .player-marker {
+    transform: translate(-50%, -52%) scale(0.65) !important;
+    animation: playerBobMobile 1.8s ease-in-out infinite !important;
+  }
+}
+
+@keyframes playerBobMobile {
+  0%,
+  100% {
+    transform: translate(-50%, -52%) scale(0.65);
+  }
+  50% {
+    transform: translate(-50%, -58%) scale(0.65);
   }
 }
