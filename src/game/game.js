@@ -1754,17 +1754,19 @@ function renderMap(stats) {
     const completed = completedSet();
     return content.doors
       .map((door, index) => {
-const pos = getNodePosition(index, content.doors.length, door.id);
+        const pos = getNodePosition(index, content.doors.length, door.id);
         const isCompleted = completed.has(door.id);
         const unlocked = isDoorUnlocked(index);
         const selected = selectedDoorId === door.id && !selectedObstacleId;
-        const src = isCompleted || unlocked ? assetUrls.OPEN_DOOR : assetUrls.LOCKED_DOOR;
+        const src = isCompleted ? assetUrls.OPEN_DOOR : assetUrls.LOCKED_DOOR;
         const className = ["map-node", isCompleted ? "is-complete" : "", unlocked ? "is-unlocked" : "is-locked", selected ? "is-selected" : ""].join(" ");
+        
         return `
           <button class="${className}" style="--x:${pos.x}%;--y:${pos.y}%" data-action="select-door" data-id="${escapeHtml(door.id)}" aria-label="${escapeHtml(door.title)}">
             <img src="${src}" alt="" draggable="false" />
             <span class="node-number">${index + 1}</span>
             <b>${escapeHtml(door.title.replace("باب ", ""))}</b>
+            ${isCompleted ? '<span class="node-done-icon"></span>' : ''}
           </button>
         `;
       })

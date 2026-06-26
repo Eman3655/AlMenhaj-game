@@ -2390,3 +2390,93 @@ button {
     transform: translate(-50%, -58%) scale(0.65);
   }
 }
+
+/* === توافق صفحة تسجيل الدخول مع الجوال === */
+@media (max-width: 760px) {
+  .auth-screen {
+    padding: 0.5rem;
+    /* توسيط النموذج عمودياً في منتصف الشاشة */
+    align-items: center;
+  }
+
+  .auth-shell {
+    min-height: auto;
+    /* تحويل التخطيط الجانبي إلى عمودي */
+    grid-template-columns: 1fr;
+    border-radius: 1.4rem;
+    overflow: hidden;
+  }
+
+  /* إخفاء الجزء الجانبي (Hero) على الجوال لأن النموذج هو الأهم */
+  .auth-hero {
+    display: none;
+  }
+
+  /* جعل النموذج يأخذ كامل المساحة */
+  .auth-panel {
+    padding: 2rem 1.5rem;
+    text-align: center;
+  }
+
+  .auth-panel-head h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .auth-panel-head p {
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.8;
+  }
+
+  .auth-form {
+    gap: 1rem;
+  }
+
+  .auth-form label {
+    font-size: 0.9rem;
+  }
+
+  .auth-form input {
+    min-height: 3.4rem;
+    font-size: 1rem;
+    border-radius: 1.2rem;
+    padding: 0.9rem 1.2rem;
+  }
+
+  .auth-submit {
+    min-height: 3.4rem;
+    font-size: 1.1rem;
+    border-radius: 1.2rem;
+    margin-top: 0.5rem;
+  }
+
+  .auth-switch {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+  }
+
+  .auth-error {
+    font-size: 0.85rem;
+    min-height: 1.2rem;
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .auth-screen {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .auth-shell {
+    border-radius: 0;
+    min-height: 100dvh;
+  }
+
+  .auth-panel {
+    padding: 1.5rem 1.2rem;
+    justify-content: center;
+  }
+}
