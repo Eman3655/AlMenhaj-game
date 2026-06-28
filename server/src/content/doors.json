@@ -27,7 +27,7 @@
   { "id": "door-22", "number": 22, "title": "مفاتيح الهداية والبصيرة", "file": "door-22.json", "cardId": "card-22", "rewardId": "reward-22", "xp": 80 },
   { "id": "door-23", "number": 23, "title": "الصحبة الصالحة", "file": "door-23.json", "cardId": "card-23", "rewardId": "reward-23", "xp": 80 },
   { "id": "door-24", "number": 24, "title": "الحذر من الفتن", "file": "door-24.json", "cardId": "card-24", "rewardId": "reward-24", "xp": 80 },
-  { "id": "door-25", "number": 25, "title": "أسباب ضعف المسلمين", "file": "door-25.json", "cardId": "card-25", "rewardId": "reward-25", "xp": 80 },
+  { "id": "door-25", "number": 25, "title": "ضعف المسلمين أسباب", "file": "door-25.json", "cardId": "card-25", "rewardId": "reward-25", "xp": 80 },
 
   { "id": "door-26", "number": 26, "title": "السنن الإلهية في الإصلاح", "file": "door-26.json", "cardId": "card-26", "rewardId": "reward-26", "xp": 80 },
   { "id": "door-27", "number": 27, "title": "حسن العاقبة بعد البلاء", "file": "door-27.json", "cardId": "card-27", "rewardId": "reward-27", "xp": 80 },
