@@ -33,12 +33,12 @@ function normalizeMapPosition(pos) {
 }
 
 const LEVELS = [
-  { min: 0, title: "المبتدئ" },
-  { min: 90, title: "طالب العلم" },
-  { min: 210, title: "المجتهد" },
-  { min: 360, title: "الداعية" },
-  { min: 540, title: "حامل العلم" },
-  { min: 760, title: "وارث النبوة" },
+  { min: 0, title: "التأسيس والبناء" },
+  { min: 400, title: "التزكية والعمل" },
+  { min: 800, title: "المسؤولية والإصلاح" },
+  { min: 1200, title: "الوعي وتمكين الثغور" },
+  { min: 1440, title: "الثبات ومواجهة الفتن" },
+  { min: 2080, title: "اليقين والمبشرات" },
 ];
 
 
@@ -216,6 +216,19 @@ let bgAudio = null;
 let musicPlaylist = [];
 let currentTrackIndex = 0;
 let isMusicPlaying = false;
+let studentOpenSections = new Set();
+
+function syncTempQuestionFromEditor() {
+  if (!tempQuestion) return;
+
+  const editor = shell?.querySelector(".question-editor");
+  if (!editor) return;
+
+  tempQuestion = readQuestionFromForm(tempQuestion);
+}
+
+
+
   function playTone(type = "tap") {
     if (!audioContext) return;
     const oscillator = audioContext.createOscillator();
@@ -502,7 +515,7 @@ async function completeDoor(door) {
 
   if (!progress.completedDoors.includes(door.id)) {
       const questions = getDoorQuestions(door);
-      const threshold = Math.ceil(currentQuestionMaxScore * 0.8);
+      const threshold = Math.ceil(currentQuestionMaxScore * 0.95);
       const earnedCard = currentQuestionMaxScore > 0 && currentQuestionScore >= threshold;
       const card = content.cards.find((item) => item.id === door.cardId);
 
@@ -828,60 +841,71 @@ async function resolveObstacle(obstacle, viaCard = false) {
       await persist();
     }
   }
-  function handleChange(event) {
-    const el = event.target;
-    if (el.name && el.name.startsWith("match-")) {
-      matchSelections[el.name.replace("match-", "")] = el.value;
-    }
-    if (el.id === "fill-answer-input") {
-      fillAnswer = el.value;
-    }
-    
-    if (el.name === "questionType") {
-      const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
-      if (!obstacle) return;
 
-      const form = el.closest("form");
-      if (form) {
-        obstacle.title = String(form.querySelector('[name="title"]')?.value || obstacle.title).trim();
-        obstacle.prompt = String(form.querySelector('[name="prompt"]')?.value || obstacle.prompt).trim();
-        obstacle.gateAfter = String(form.querySelector('[name="gateAfter"]')?.value || obstacle.gateAfter);
-        obstacle.requiredCardId = String(form.querySelector('[name="requiredCardId"]')?.value || obstacle.requiredCardId);
-        
-        const refType = String(form.querySelector('[name="referenceType"]')?.value || "article");
-        const refTitle = String(form.querySelector('[name="referenceTitle"]')?.value || "").trim();
-        const refLink = String(form.querySelector('[name="referenceLink"]')?.value || "").trim();
-        obstacle.referenceType = refType;
-        obstacle.reference_type = refType;
-        obstacle.referenceTitle = refTitle;
-        obstacle.reference_title = refTitle;
-        obstacle.referenceLink = refLink;
-        obstacle.reference_link = refLink;
+function handleChange(event) {
+  const el = event.target;
 
-        if (obstacle.questionType === "mcq") {
-           obstacle.options = splitList(form.querySelector('[name="options"]')?.value);
-           obstacle.answerIndex = Number(form.querySelector('[name="answerIndex"]')?.value) || 0;
-        }
-      }
+  if (el.closest(".question-editor") && tempQuestion) {
+    syncTempQuestionFromEditor();
+  }
 
-      const newType = el.value;
-      obstacle.questionType = newType;
-      obstacle.question_type = newType;
-      
-      if (newType === "fill" && !obstacle.acceptableAnswers?.length) {
-        obstacle.acceptableAnswers = [""];
-        obstacle.acceptable_answers = [""];
+  if (el.name && el.name.startsWith("match-")) {
+    matchSelections[el.name.replace("match-", "")] = el.value;
+  }
+
+  if (el.id === "fill-answer-input") {
+    fillAnswer = el.value;
+  }
+
+  if (el.name === "questionType") {
+    const obstacle = content.obstacles.find(o => o.id === editingObstacleId);
+    if (!obstacle) return;
+
+    const form = el.closest("form");
+    if (form) {
+      obstacle.title = String(form.querySelector('[name="title"]')?.value || obstacle.title).trim();
+      obstacle.prompt = String(form.querySelector('[name="prompt"]')?.value || obstacle.prompt).trim();
+      obstacle.gateAfter = String(form.querySelector('[name="gateAfter"]')?.value || obstacle.gateAfter);
+      obstacle.requiredCardId = String(form.querySelector('[name="requiredCardId"]')?.value || obstacle.requiredCardId);
+
+      const refType = String(form.querySelector('[name="referenceType"]')?.value || "article");
+      const refTitle = String(form.querySelector('[name="referenceTitle"]')?.value || "").trim();
+      const refLink = String(form.querySelector('[name="referenceLink"]')?.value || "").trim();
+
+      obstacle.referenceType = refType;
+      obstacle.reference_type = refType;
+      obstacle.referenceTitle = refTitle;
+      obstacle.reference_title = refTitle;
+      obstacle.referenceLink = refLink;
+      obstacle.reference_link = refLink;
+
+      if (obstacle.questionType === "mcq") {
+        obstacle.options = splitList(form.querySelector('[name="options"]')?.value);
+        obstacle.answerIndex = Number(form.querySelector('[name="answerIndex"]')?.value) || 0;
       }
-      if (newType === "match" && !obstacle.matchPairs?.length) {
-        obstacle.matchPairs = [{ left: "", right: "" }];
-        obstacle.match_pairs = [{ left: "", right: "" }];
-      }
-      if (newType === "mcq" && (!obstacle.options || !obstacle.options.length)) {
-        obstacle.options = ["", "", ""];
-      }
-      render();
     }
-  }    
+
+    const newType = el.value;
+    obstacle.questionType = newType;
+    obstacle.question_type = newType;
+
+    if (newType === "fill" && !obstacle.acceptableAnswers?.length) {
+      obstacle.acceptableAnswers = [""];
+      obstacle.acceptable_answers = [""];
+    }
+
+    if (newType === "match" && !obstacle.matchPairs?.length) {
+      obstacle.matchPairs = [{ left: "", right: "" }];
+      obstacle.match_pairs = [{ left: "", right: "" }];
+    }
+
+    if (newType === "mcq" && (!obstacle.options || !obstacle.options.length)) {
+      obstacle.options = ["", "", ""];
+    }
+
+    render();
+  }
+}  
 
   async function saveDoorQuestionsToServer() {
     if (!authToken || currentUser?.role?.trim() !== "admin") {
@@ -924,7 +948,27 @@ async function handleClick(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
+  event.preventDefault();
+
   const action = button.dataset.action;
+
+  const editorActions = new Set([
+    "change-q-type",
+    "add-mcq-option",
+    "remove-mcq-option",
+    "add-match-pair",
+    "remove-match-pair",
+    "add-fill-answer",
+    "remove-fill-answer",
+    "add-challenge-item",
+    "remove-challenge-item",
+    "add-challenge-correct",
+    "remove-challenge-correct",
+  ]);
+
+  if (editorActions.has(action) && tempQuestion) {
+    syncTempQuestionFromEditor();
+  }
     if (action === "toggle-music") {
     toggleMusic();
     return;
@@ -941,6 +985,16 @@ async function handleClick(event) {
     return;
   }
   const id = button.dataset.id;
+
+  if (action === "toggle-student-section") {
+  if (studentOpenSections.has(id)) {
+    studentOpenSections.delete(id);
+  } else {
+    studentOpenSections.add(id);
+  }
+  render();
+  return;
+}
 
   if (action === "logout") {
     if(bgAudio) { bgAudio.pause(); isMusicPlaying = false; }
@@ -1156,18 +1210,27 @@ async function handleClick(event) {
     render();
     return;
   }
-  if (action === "change-q-type") {
+if (action === "change-q-type") {
     if (!tempQuestion) return;
-    const newType = button.dataset.type || "mcq";
-    tempQuestion = getEmptyQuestion(newType);
+
+    const old = tempQuestion;
+    const newType = shell.querySelector('[name="q-type"]')?.value || old.type;
+
+    if (newType !== old.type) {
+        tempQuestion = getEmptyQuestion(newType);
+        tempQuestion.prompt = old.prompt;
+        tempQuestion.points = old.points;
+        tempQuestion.hint = old.hint;
+    }
+
     render();
     return;
-  }
+}
   if (action === "add-mcq-option") {
     if (!tempQuestion) return;
-    tempQuestion.options.push("");
-    render();
-    return;
+tempQuestion.options.push("");
+render();
+return;
   }
   if (action === "remove-mcq-option") {
     if (!tempQuestion) return;
@@ -1576,7 +1639,6 @@ if (action === "new-obstacle") {
 function render() {
   if (!shell) return;
 
-  const previousScrollTop = getMapScrollTop(shell);
   const view = shell.dataset.view || "map";
   const stats = getStats();
 
@@ -1608,11 +1670,11 @@ function render() {
       ${currentUser?.role?.trim() === "admin" ? navButton("admin", "الأدمن", "⚙️", view) : ""}
       ${currentUser ? `<button class="nav-item logout-button" data-action="logout"><span>🚪</span>خروج</button>` : ""}
     </nav>
-${renderRewardAnimation()}
-${renderHitAnimation()}
+    ${renderRewardAnimation()}
+    ${renderHitAnimation()}
   `;
 
-document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
+  document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
 
   shell.insertAdjacentHTML(
     "afterend",
@@ -1629,11 +1691,12 @@ document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
       ${navCollapsed ? "☰" : "✕"}
     </button>
   `
-);
+  );
 
   saveIndicator = shell.querySelector(".save-indicator");
-  renderSaveState();
+renderSaveState();
 
+if (view === "map" && !panelOpen) {
   const mapBg = shell.querySelector(".map-bg");
   const scrollToPlayerIfReady = () => scrollToPlayer(shell);
 
@@ -1643,6 +1706,7 @@ document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
       mapBg.addEventListener("load", scrollToPlayerIfReady, { once: true });
     }
   });
+}
 }
 
   function navButton(id, label, icon, current) {
@@ -1885,7 +1949,7 @@ function renderPlayerMarker() {
       const question = questions[currentQuestionIndex];
       if (!question) {
         const percentage = currentQuestionMaxScore ? Math.round((currentQuestionScore / currentQuestionMaxScore) * 100) : 0;
-        const threshold = Math.ceil(currentQuestionMaxScore * 0.8);
+        const threshold = Math.ceil(currentQuestionMaxScore * 0.95);
         const earnedCard = currentQuestionScore >= threshold;
         return `
           <p class="eyebrow">نتيجة التحدي</p>
@@ -2009,40 +2073,54 @@ function getEmptyQuestion(type) {
 }
 
 function readQuestionFromForm(q) {
-  q.type = shell.querySelector('[name="q-type"]')?.value || q.type || "mcq";
-  q.prompt = shell.querySelector('[name="q-prompt"]')?.value?.trim() || "";
-  q.points = Number(shell.querySelector('[name="q-points"]')?.value) || 10;
-  q.hint = shell.querySelector('[name="q-hint"]')?.value?.trim() || "";
+  const editor = shell?.querySelector(".question-editor") || shell;
+
+  q.type = editor.querySelector('[name="q-type"]')?.value || q.type || "mcq";
+  q.prompt = editor.querySelector('[name="q-prompt"]')?.value?.trim() || "";
+  q.points = Number(editor.querySelector('[name="q-points"]')?.value) || 10;
+  q.hint = editor.querySelector('[name="q-hint"]')?.value?.trim() || "";
 
   if (q.type === "mcq") {
     q.options = [];
-    shell.querySelectorAll('[name^="q-option-"]').forEach(el => q.options.push(el.value.trim()));
-    q.options = q.options.filter(Boolean);
-    q.answerIndex = Number(shell.querySelector('[name="q-answer-index"]:checked')?.value) || 0;
+    editor.querySelectorAll('[name^="q-option-"]').forEach(el => {
+      q.options.push(el.value);
+    });
+    q.answerIndex = Number(editor.querySelector('[name="q-answer-index"]:checked')?.value) || 0;
   }
+
   if (q.type === "truefalse") {
-    q.correctAnswer = shell.querySelector('[name="q-correct-tf"]:checked')?.value !== "false";
+    q.correctAnswer = editor.querySelector('[name="q-correct-tf"]:checked')?.value !== "false";
   }
+
   if (q.type === "match") {
     q.pairs = [];
-    shell.querySelectorAll('[name^="q-pair-left-"]').forEach((el, i) => {
-      const right = shell.querySelector(`[name="q-pair-right-${i}"]`)?.value?.trim() || "";
-      if (el.value.trim() || right) q.pairs.push({ left: el.value.trim(), right });
+    editor.querySelectorAll('[name^="q-pair-left-"]').forEach((el, i) => {
+      const right = editor.querySelector(`[name="q-pair-right-${i}"]`)?.value || "";
+      q.pairs.push({ left: el.value || "", right });
     });
   }
+
   if (q.type === "fill") {
     q.acceptableAnswers = [];
-    shell.querySelectorAll('[name^="q-fill-answer-"]').forEach(el => {
-      if (el.value.trim()) q.acceptableAnswers.push(el.value.trim());
+    editor.querySelectorAll('[name^="q-fill-answer-"]').forEach(el => {
+      q.acceptableAnswers.push(el.value || "");
     });
   }
+
   if (q.type === "challenge") {
-    q.challengeType = shell.querySelector('[name="q-challenge-type"]')?.value || "order";
+    q.challengeType = editor.querySelector('[name="q-challenge-type"]')?.value || "order";
+
     q.items = [];
+    editor.querySelectorAll('[name^="q-ch-item-"]').forEach(el => {
+      q.items.push(el.value || "");
+    });
+
     q.correct = [];
-    shell.querySelectorAll('[name^="q-ch-item-"]').forEach(el => { if (el.value.trim()) q.items.push(el.value.trim()); });
-    shell.querySelectorAll('[name^="q-ch-correct-"]').forEach(el => { if (el.value.trim()) q.correct.push(el.value.trim()); });
+    editor.querySelectorAll('[name^="q-ch-correct-"]').forEach(el => {
+      q.correct.push(el.value || "");
+    });
   }
+
   return q;
 }
 
@@ -2063,8 +2141,8 @@ function renderObstaclePanel() {
     const card = content.cards.find((item) => item.id === obstacle.requiredCardId);
     const ownsCard = progress.cards.includes(obstacle.requiredCardId);
 
-    const refTitle = obstacle.referenceTitle || obstacle.reference_title || "";
-    const refLink = obstacle.referenceLink || obstacle.reference_link || "";
+    const refTitle = (obstacle.referenceTitle || obstacle.reference_title || "").trim();
+    const refLink = (obstacle.referenceLink || obstacle.reference_link || "").trim();
 
     let referenceSection = "";
     if (refTitle || refLink) {
@@ -2074,7 +2152,7 @@ function renderObstaclePanel() {
           ${refTitle ? `<p class="reference-title">${escapeHtml(refTitle)}</p>` : ""}
           ${refLink ? `
             <a class="reference-link" href="${escapeHtml(refLink)}" target="_blank" rel="noopener noreferrer">
-              🔗 رابط المرجع
+              🔗  رابط المرجع
             </a>
           ` : ""}
         </div>
@@ -2124,7 +2202,7 @@ function renderObstaclePanel() {
       <p class="eyebrow">عقبة في الطريق</p>
       <h2>${escapeHtml(obstacle.title)}</h2>
       ${referenceSection}
-      <p>${escapeHtml(obstacle.prompt)}</p>
+      <p class="obstacle-question-text">${escapeHtml(obstacle.prompt)}</p>
       <div class="obstacle-card">
         <img src="${assetUrls.OBSTACLE_TOKEN}" alt="" draggable="false" />
         <div>
@@ -2139,6 +2217,20 @@ function renderObstaclePanel() {
       ${feedback ? `<p class="feedback">${escapeHtml(feedback)}</p>` : ""}
     `;
   }
+
+function studentAccordion(id, title, icon, content) {
+  const isOpen = studentOpenSections.has(id);
+
+  return `
+    <section class="student-accordion ${isOpen ? "is-open" : ""}">
+      <button type="button" class="student-accordion-header" data-action="toggle-student-section" data-id="${id}">
+        <span><i>${icon}</i>${escapeHtml(title)}</span>
+        <b>${isOpen ? "▲" : "▼"}</b>
+      </button>
+      ${isOpen ? `<div class="student-accordion-body">${content}</div>` : ""}
+    </section>
+  `;
+}
 
 function renderStudent(stats) {
   const completed = completedSet();
@@ -2184,8 +2276,8 @@ function renderStudent(stats) {
           <span class="journey-status-badge">${statusIcon} ${statusText}</span>
         </div>
         <div class="journey-door-rewards">
-          <span class="jr ${hasKey ? 'jr-has' : ''}">🔑 مفتاح ${hasKey ? '✓' : ''}</span>
-          ${card ? `<span class="jr ${hasCard ? 'jr-has' : ''}">${escapeHtml(card.icon)} ${escapeHtml(card.title)} ${hasCard ? '✓' : ''}</span>` : ''}
+          <span class="jr ${hasKey ? "jr-has" : ""}">🔑 مفتاح ${hasKey ? "✓" : ""}</span>
+          ${card ? `<span class="jr ${hasCard ? "jr-has" : ""}">${escapeHtml(card.icon)} ${escapeHtml(card.title)} ${hasCard ? "✓" : ""}</span>` : ""}
         </div>
       </div>
     `;
@@ -2200,10 +2292,17 @@ function renderStudent(stats) {
       </div>
     `).join("") || `<p class="empty-note">لم تحصل على أي مفتاح بعد.</p>`;
 
+  const cardsList = `
+    <p class="section-note">اجمع البطاقات بحصولك على 95% أو أكثر في كل باب</p>
+    <div class="card-grid">
+      ${content.cards.map((card) => renderCard(card, ownedCards.has(card.id))).join("")}
+    </div>
+  `;
+
   const obstaclesList = content.obstacles.map(obs => {
     const isResolved = resolvedObstacles.has(obs.id);
     return `
-      <div class="obs-item ${isResolved ? 'obs-done' : ''}">
+      <div class="obs-item ${isResolved ? "obs-done" : ""}">
         <span class="obs-icon">${isResolved ? "✅" : "⏳"}</span>
         <div>
           <strong>${escapeHtml(obs.title)}</strong>
@@ -2212,6 +2311,17 @@ function renderStudent(stats) {
       </div>
     `;
   }).join("") || `<p class="empty-note">لا توجد عقبات في هذه الرحلة.</p>`;
+
+  const achievementsList = progress.achievements.length
+    ? progress.achievements.map(item => `<p><span>${escapeHtml(item.at)}</span>${escapeHtml(item.text)}</p>`).join("")
+    : `<p>ابدأ أول باب لتظهر إنجازاتك هنا.</p>`;
+
+  const nextStep = currentDoor
+    ? `
+      <p>الباب التالي: <strong>${escapeHtml(currentDoor.title)}</strong></p>
+      <button type="button" class="primary-button full" data-action="tab" data-id="map">الذهاب إلى الخريطة</button>
+    `
+    : `<p>🎉 مبروك! أكملت جميع الأبواب!</p>`;
 
   return `
     <div class="dashboard student-board">
@@ -2237,7 +2347,7 @@ function renderStudent(stats) {
         <div class="big-progress"><i style="width:${stats.progressPercent}%"></i></div>
       </section>
 
-      <section class="stat-grid">
+      <section class="stat-grid student-stat-grid">
         ${statCard("المكتملة", stats.completed)}
         ${statCard("المتاحة", stats.unlocked)}
         ${statCard("المغلقة", stats.locked)}
@@ -2248,43 +2358,14 @@ function renderStudent(stats) {
         ${statCard("المستوى", stats.level.title)}
       </section>
 
-      <section class="journey-section">
-        <h3>🗺️ رحلة الأبواب</h3>
-        <div class="journey-list">${doorsJourney}</div>
-      </section>
-
-      <section class="keys-section">
-        <h3>🔑 المفاتيح</h3>
-        <div class="keys-grid">${keysList}</div>
-      </section>
-
-      <section class="cards-section">
-        <h3>🃏 البطاقات</h3>
-        <p class="section-note">اجمع البطاقات بحصولك على 80% أو أكثر في كل باب</p>
-        <div class="card-grid">
-          ${content.cards.map((card) => renderCard(card, ownedCards.has(card.id))).join("")}
-        </div>
-      </section>
-
-      <section class="obstacles-section">
-        <h3>⚡ العقبات</h3>
-        <div class="obstacles-list">${obstaclesList}</div>
-      </section>
-
-      <section class="achievements">
-        <h3>🏆 الإنجازات</h3>
-        ${progress.achievements.length
-          ? progress.achievements.map(item => `<p><span>${escapeHtml(item.at)}</span>${escapeHtml(item.text)}</p>`).join("")
-          : `<p>ابدأ أول باب لتظهر إنجازاتك هنا.</p>`}
-      </section>
-
-      <section class="next-step-section">
-        <h3>📌 الخطوة التالية</h3>
-        ${currentDoor
-          ? `<p>الباب التالي: <strong>${escapeHtml(currentDoor.title)}</strong></p>
-             <button class="primary-button full" data-action="tab" data-id="map">الذهاب إلى الخريطة</button>`
-          : `<p>🎉 مبروك! أكملت جميع الأبواب!</p>`}
-      </section>
+      <div class="student-accordion-list">
+        ${studentAccordion("journey", "رحلة الأبواب", "🗺️", `<div class="journey-list">${doorsJourney}</div>`)}
+        ${studentAccordion("keys", "المفاتيح", "🔑", `<div class="keys-grid">${keysList}</div>`)}
+        ${studentAccordion("cards", "البطاقات", "🃏", cardsList)}
+        ${studentAccordion("obstacles", "العقبات", "⚡", `<div class="obstacles-list">${obstaclesList}</div>`)}
+        ${studentAccordion("achievements", "الإنجازات", "🏆", `<div class="achievements">${achievementsList}</div>`)}
+        ${studentAccordion("next", "الخطوة التالية", "📌", `<div class="next-step-section">${nextStep}</div>`)}
+      </div>
 
     </div>
   `;
