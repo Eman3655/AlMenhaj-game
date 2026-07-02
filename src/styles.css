@@ -2556,3 +2556,54 @@ button {
 .student-accordion-body .obstacles-list {
   margin-top: 10px;
 }
+
+.level-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(8, 24, 32, 0.72);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.level-transition-card {
+  width: min(520px, 94vw);
+  background: linear-gradient(180deg, #fff8df, #f4e4bd);
+  border: 1px solid rgba(138, 90, 24, 0.35);
+  border-radius: 28px;
+  padding: 28px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  animation: levelPop 0.35s ease-out;
+}
+
+.level-transition-icon {
+  font-size: 58px;
+  margin-bottom: 8px;
+}
+
+.level-transition-card h2 {
+  margin: 8px 0 14px;
+  color: #064b52;
+  font-size: 30px;
+}
+
+.level-transition-card p {
+  color: #4b3b22;
+  line-height: 1.9;
+  font-size: 17px;
+  white-space: pre-line;
+}
+
+@keyframes levelPop {
+  from {
+    transform: scale(0.92) translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}

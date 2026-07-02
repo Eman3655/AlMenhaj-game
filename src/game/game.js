@@ -41,6 +41,43 @@ const LEVELS = [
   { min: 2080, title: "اليقين والمبشرات" },
 ];
 
+const LEVEL_INTROS = {
+  "التأسيس والبناء": {
+    icon: "🌱",
+    title: "التأسيس والبناء",
+    message: "أهلاً بك يا بطل في بداية رحلتك العظيمة. هنا نضع حجر الأساس، فكل بناء شامخ يحتاج إلى قواعد قوية وثابتة لا تهزها الرياح. في هذا المستوى، ستتعلم كيف تجعل كلام الله وسنة نبيه ﷺ هما الميزان والموجّه لكل حياتك..\n\n🎯 انطلق بجوارح مستسلمة، وعقل يتدبر، وقلب يُعظم شعائر الله.. هذا هو حصنك الأول!",
+    button: "ابدأ مرحلة التأسيس"
+  },
+  "التزكية والعمل": {
+    icon: "🌿",
+    title: "التزكية والعمل",
+message: "مبارك تجاوزك للحصن الأول! الآن، وبعد أن ضبطت بوصلة التلقي، حان الوقت لتلتفت إلى الداخل. هذا المستوى يأخذك في رحلة لتنقية قلبك من الشوائب، وتحويل علمك إلى عمل حقيقي على الأرض، لتكون نيتك خالصة لله وحده.\n\n✨ العلم بلا عمل كشجرة بلا ثمر، فبادر بطهارة قلبك، واجعل خطواتك نفعاً يرى أثره الجميع!",
+    button: "ابدأ مرحلة التزكية والعمل"
+  },
+  "المسؤولية والإصلاح": {
+    icon: "🛡️",
+    title: "المسؤولية والإصلاح",
+message: "لقد نضجت كثيراً، ولم يعد صلاحك كافياً لنفسك فقط! الإسلام يُريدك مصلحاً ومؤثراً فيمن حولك. في هذا المستوى، ستتحمل أمانتك الفردية والعامة، وتمشي على خطى الأنبياء والرسل لتأمر بالمعروف وتنهى عن المنكر بوعي وحكمة.\n\n🛡️ المؤمن للمؤمن كالبنيان .. احمل همّ أمتك، وكن شعلة الإصلاح في مجتمعك." ,
+    button: "ابدأ مرحلة المسؤولية والإصلاح"
+  },
+  "الوعي وتمكين الثغور": {
+    icon: "🏛️",
+    title: "الوعي وتمكين الثغور",
+message: "رائع! أنت الآن مصلح في الميدان، لكن المصلح الذكي يحتاج إلى عيون ساهرة ورادار يكشف المخاطر. في هذا المستوى، ستتعلم كيف تفهم مكائد أعداء الدين والمنافقين لئلا تنخدع، وستعرف كيف يتكامل دور الشباب الواعي والمرأة المسلمة في حماية ثغور الأمة.\n\n🚀 كن يَقِظاً بَصيراً.. فبناء الأمة وحمايتها مسؤولية يتشارك فيها الجميع بقوة وعلم." ,   button: "ابدأ مرحلة الوعي"
+  },
+  "الثبات ومواجهة الفتن": {
+    icon: "⚔️",
+    title: "الثبات ومواجهة الفتن",
+message: "احذر يا بطل، فالطريق هنا يزداد صعوبة، والعقبات أصبحت أشد! ستقابلك فتن الدنيا ورياح الانتكاس المحرقة. في هذا المستوى، ستحتاج إلى إلقاء \"مرساة الثبات\"، والتمسك بحسن الخلق والاعتدال، وفهم السنن الإلهية لتسير في طريق الصلاح والإصلاح على بصيرة .\n\n🧭 إذا عظمت الفتن، ثبتت القلوب الواعية.. افهم واقعك، وتماسك مع إخوانك، وسر وفق سنن الله تعالى." ,   
+button: "ابدأ مرحلة الثبات"
+  },
+  "اليقين والمبشرات": {
+    icon: "🌅",
+    title: "اليقين والمبشرات",
+  message: "ها قد وصلت إلى القمة، ولم يبق بينك وبين الفوز العظيم إلا خطوات! بعد البلاء والصبر يأتي التمكين وبشائر النصر. في هذه المرحلة الختامية، ستتذوق طعم اليقين بالإسلام، وتطير إلى الله بجناحي الخوف والرجاء، لتتوج رحلتك بأعظم مقام: محبة الرسول ﷺ والشوق إلى لقاء الله عز وجل.\n\n👑 العاقبة للمتقين! ثبت نظرك على الجائزة الكبرى، وأقبل بكليتك على الله.. لقد اقترب الفوز العظيم!",
+    button: "ابدأ مرحلة اليقين"
+  }
+};
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -217,6 +254,8 @@ let musicPlaylist = [];
 let currentTrackIndex = 0;
 let isMusicPlaying = false;
 let studentOpenSections = new Set();
+let levelTransition = null;
+let pendingLevelTransition = null;
 
 function syncTempQuestionFromEditor() {
   if (!tempQuestion) return;
@@ -382,6 +421,20 @@ async function loadSave() {
     }
   }
 
+function checkLevelTransition(oldXp, newXp) {
+  const oldLevel = getLevel(oldXp);
+  const newLevel = getLevel(newXp);
+
+  if (oldLevel.title !== newLevel.title) {
+    pendingLevelTransition = LEVEL_INTROS[newLevel.title] || {
+      icon: "✨",
+      title: newLevel.title,
+      message: "لقد دخلت مرحلة جديدة في رحلتك.",
+      button: "متابعة الرحلة"
+    };
+  }
+}
+
   function renderSaveState(text = lastSaveOk ? "تم الحفظ" : "تعذر الحفظ") {
     if (saveIndicator) saveIndicator.textContent = text;
   }
@@ -482,17 +535,30 @@ function showNextReward() {
   clearRewardAnimation();
   rewardAnimation = rewardQueue.shift() || null;
   render();
+
   if (rewardAnimation) {
     const duration = rewardAnimation.type === "key" ? 1500 : 2000;
+
     rewardTimeout = setTimeout(() => {
       rewardAnimation = null;
       rewardTimeout = null;
+
       if (rewardQueue.length > 0) {
         showNextReward();
       } else {
+        if (pendingLevelTransition) {
+          levelTransition = pendingLevelTransition;
+          pendingLevelTransition = null;
+        }
         render();
       }
     }, duration);
+  } else {
+    if (pendingLevelTransition) {
+      levelTransition = pendingLevelTransition;
+      pendingLevelTransition = null;
+      render();
+    }
   }
 }
 
@@ -515,13 +581,14 @@ async function completeDoor(door) {
 
   if (!progress.completedDoors.includes(door.id)) {
       const questions = getDoorQuestions(door);
-      const threshold = Math.ceil(currentQuestionMaxScore * 0.95);
+      const threshold = Math.ceil(currentQuestionMaxScore * 0.9);
       const earnedCard = currentQuestionMaxScore > 0 && currentQuestionScore >= threshold;
       const card = content.cards.find((item) => item.id === door.cardId);
 
       progress.completedDoors.push(door.id);
-      progress.xp += Number(door.xp) || 80;
-
+const oldXp = progress.xp;
+progress.xp += Number(door.xp) || 80;
+checkLevelTransition(oldXp, progress.xp);
       const keyId = door.id;
       const keyName = makeDoorKeyName(door.title);
       if (!progress.keys.includes(keyId)) {
@@ -635,6 +702,24 @@ async function resolveObstacle(obstacle, viaCard = false) {
     currentQuestionMaxScore = 0;
     usedSabrBoost = false;
   }
+
+function renderLevelTransition() {
+  if (!levelTransition) return "";
+
+  return `
+    <div class="level-transition">
+      <div class="level-transition-card">
+        <div class="level-transition-icon">${levelTransition.icon}</div>
+        <p class="eyebrow">مرحلة جديدة</p>
+        <h2>${escapeHtml(levelTransition.title)}</h2>
+        <p>${escapeHtml(levelTransition.message)}</p>
+        <button type="button" class="primary-button full" data-action="close-level-transition">
+          ${escapeHtml(levelTransition.button || "متابعة الرحلة")}
+        </button>
+      </div>
+    </div>
+  `;
+}  
 
   function getDoorQuestions(door) {
     if (Array.isArray(door.questions) && door.questions.length > 0) {
@@ -985,6 +1070,12 @@ async function handleClick(event) {
     return;
   }
   const id = button.dataset.id;
+
+  if (action === "close-level-transition") {
+  levelTransition = null;
+  render();
+  return;
+}
 
   if (action === "toggle-student-section") {
   if (studentOpenSections.has(id)) {
@@ -1670,8 +1761,9 @@ function render() {
       ${currentUser?.role?.trim() === "admin" ? navButton("admin", "الأدمن", "⚙️", view) : ""}
       ${currentUser ? `<button class="nav-item logout-button" data-action="logout"><span>🚪</span>خروج</button>` : ""}
     </nav>
-    ${renderRewardAnimation()}
-    ${renderHitAnimation()}
+      ${renderRewardAnimation()}
+      ${renderHitAnimation()}
+      ${renderLevelTransition()}
   `;
 
   document.querySelectorAll(".floating-toggle").forEach((btn) => btn.remove());
@@ -1949,7 +2041,7 @@ function renderPlayerMarker() {
       const question = questions[currentQuestionIndex];
       if (!question) {
         const percentage = currentQuestionMaxScore ? Math.round((currentQuestionScore / currentQuestionMaxScore) * 100) : 0;
-        const threshold = Math.ceil(currentQuestionMaxScore * 0.95);
+        const threshold = Math.ceil(currentQuestionMaxScore * 0.9);
         const earnedCard = currentQuestionScore >= threshold;
         return `
           <p class="eyebrow">نتيجة التحدي</p>
@@ -2293,7 +2385,7 @@ function renderStudent(stats) {
     `).join("") || `<p class="empty-note">لم تحصل على أي مفتاح بعد.</p>`;
 
   const cardsList = `
-    <p class="section-note">اجمع البطاقات بحصولك على 95% أو أكثر في كل باب</p>
+    <p class="section-note">اجمع البطاقات بحصولك على 90% أو أكثر في كل باب</p>
     <div class="card-grid">
       ${content.cards.map((card) => renderCard(card, ownedCards.has(card.id))).join("")}
     </div>
@@ -2783,17 +2875,26 @@ start() {
   root.addEventListener("change", handleChange);
   root.addEventListener("input", handleChange);
 
-  startButton.addEventListener("click", async () => {
-    if (!imagesReady || !saveReady || started) return;
-    started = true;
-    await unlockAudio();
-    initMusic();
-    startMusic();
-    overlay.hidden = true;
-    shell.hidden = false;
-    playTone("success");
-    render();
-  });
+startButton.addEventListener("click", async () => {
+  if (!imagesReady || !saveReady || started) return;
+
+  started = true;
+
+  await unlockAudio();
+  initMusic();
+  startMusic();
+
+  overlay.hidden = true;
+  shell.hidden = false;
+
+  playTone("success");
+
+  if (!progress.completedDoors.length && progress.xp === 0) {
+    levelTransition = LEVEL_INTROS["التأسيس والبناء"];
+  }
+
+  render();
+});
 
   Promise.allSettled(Object.values(assetUrls).map(preloadImage)).then((results) => {
     const failed = results.filter((r) => r.status === "rejected");
