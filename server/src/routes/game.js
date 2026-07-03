@@ -170,7 +170,7 @@ router.post("/complete-door", auth, async (req, res) => {
     const finalKeyId = keyId || door.id;
     const finalScore = Number(score) || 0;
     const finalMaxScore = Number(maxScore) || 0;
-    const earnedCard = finalMaxScore > 0 && finalScore >= Math.ceil(finalMaxScore * 0.8);
+    const earnedCard = finalMaxScore > 0 && finalScore >= Math.ceil(finalMaxScore * 0.95);
 
     await pool.query(
       `

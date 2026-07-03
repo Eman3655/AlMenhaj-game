@@ -581,7 +581,7 @@ async function completeDoor(door) {
 
   if (!progress.completedDoors.includes(door.id)) {
       const questions = getDoorQuestions(door);
-      const threshold = Math.ceil(currentQuestionMaxScore * 0.9);
+      const threshold = Math.ceil(currentQuestionMaxScore * 0.95);
       const earnedCard = currentQuestionMaxScore > 0 && currentQuestionScore >= threshold;
       const card = content.cards.find((item) => item.id === door.cardId);
 
@@ -2041,7 +2041,7 @@ function renderPlayerMarker() {
       const question = questions[currentQuestionIndex];
       if (!question) {
         const percentage = currentQuestionMaxScore ? Math.round((currentQuestionScore / currentQuestionMaxScore) * 100) : 0;
-        const threshold = Math.ceil(currentQuestionMaxScore * 0.9);
+        const threshold = Math.ceil(currentQuestionMaxScore * 0.95);
         const earnedCard = currentQuestionScore >= threshold;
         return `
           <p class="eyebrow">نتيجة التحدي</p>
@@ -2385,7 +2385,7 @@ function renderStudent(stats) {
     `).join("") || `<p class="empty-note">لم تحصل على أي مفتاح بعد.</p>`;
 
   const cardsList = `
-    <p class="section-note">اجمع البطاقات بحصولك على 90% أو أكثر في كل باب</p>
+    <p class="section-note">اجمع البطاقات بحصولك على 95% أو أكثر في كل باب</p>
     <div class="card-grid">
       ${content.cards.map((card) => renderCard(card, ownedCards.has(card.id))).join("")}
     </div>
