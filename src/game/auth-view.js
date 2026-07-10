@@ -32,15 +32,15 @@ export function renderAuthView(container, onSuccess) {
               ${
                 mode === "register"
                   ? `<label>
-                      <span>الاسم</span>
-                      <input name="name" type="text" placeholder="اكتب اسمك" required />
+                      <span>اسم المستخدم</span>
+                      <input name="name" type="text" placeholder="مثال: أحمد" required />
                     </label>`
                   : ""
               }
 
               <label>
-                <span>اسم المستخدم</span>
-                <input name="username" type="text" placeholder="مثال: محمد" required />
+                <span>البريد الإلكتروني</span>
+                <input name="username" type="text" placeholder="مثال: ahmed@example.com" required />
               </label>
 
               <label>
